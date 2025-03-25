@@ -13,6 +13,14 @@ if ($conn->connect_error) {
     die("Connection failed: " . $conn->connect_error);
 }
 
+
+// check if user is logged in
+if (!isset($_SESSION['user_id'])) {
+    header("location: login.php");
+    exit();
+}
+
+$user_id = $_SESSION['user_id'];
 // Initialize search
 $search = isset($_GET['search']) ? $conn->real_escape_string($_GET['search']) : '';
 
@@ -27,7 +35,7 @@ $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
 $offset = ($page - 1) * $limit;
 
 // Build the SQL query for counting the total number of entries
-$sqlCount = "SELECT COUNT(*) AS total FROM approved_found_reports WHERE status='unclaimed'";
+$sqlCount = "SELECT COUNT(*) AS total FROM pending_found_reports WHERE status='unclaimed'";
 if (!empty($search)) {
     $sqlCount .= " AND (item_name LIKE '%$search%' OR location_found LIKE '%$search%' OR category LIKE '%$search%' OR user_id LIKE '%$search%')";
 }
@@ -40,7 +48,11 @@ if ($resultCount) {
 }
 
 // Build the SQL query for fetching reports with limit and search functionality
-$sql = "SELECT * FROM approved_found_reports WHERE status='unclaimed'";
+$sql = "SELECT * FROM pending_found_reports 
+        UNION ALL 
+        SELECT * FROM approved_found_reports";
+
+
 
 if (!empty($search)) {
     $sql .= " AND (item_name LIKE '%$search%' OR location_found LIKE '%$search%' OR category LIKE '%$search%' OR user_id LIKE '%$search%')";
@@ -70,6 +82,7 @@ $userName = htmlspecialchars($_SESSION['name'] ?? 'User');
 if (!isset($_SESSION['user_id'])) {
     die("User ID not set. Please log in.");
 }
+
 
 
 
@@ -119,32 +132,32 @@ if (!isset($_SESSION['user_id'])) {
 $user_id = $_SESSION['user_id'];
 
 $successMessage = ''; // Initialize success message
-
-// Check if the claim button was clicked
 if (isset($_POST['claim'])) {
-    // Get the report ID from the POST request
     $report_id = $_POST['report_id'];
 
-    // Step 1: Fetch the item details from the approved_found_reports table
-    $query = "SELECT * FROM approved_found_reports WHERE id = ?";
+    // fetch from both approved_found_reports and pending_found_reports
+    $query = "SELECT * FROM approved_found_reports WHERE id = ? 
+              UNION 
+              SELECT * FROM pending_found_reports WHERE id = ?";
     $stmt = $conn->prepare($query);
-    $stmt->bind_param("i", $report_id);
+    $stmt->bind_param("ii", $report_id, $report_id);
     $stmt->execute();
     $result = $stmt->get_result();
     $item = $result->fetch_assoc();
 
     if ($item) {
-        // Step 2: Insert the item into the pending_claim_reports table
-        $insert_query = "INSERT INTO pending_claim_reports (user_id, item_name, category, brand, primary_color, description, picture, location_found, date_found, time_found, status, position) 
+        // insert into pending_claim_reports
+        $insert_query = "INSERT INTO pending_claim_reports 
+                        (user_id, item_name, category, brand, primary_color, description, picture, location_found, date_found, time_found, status, position) 
                          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
-        $position = "Pending"; // Explicitly set position to Pending
-        $status = $item['status']; // Keep the status as it is (e.g., 'Unclaimed')
+        $position = "Pending";
+        $status = $item['status'];
 
         $insert_stmt = $conn->prepare($insert_query);
         $insert_stmt->bind_param(
             "ssssssssssss",
-            $_SESSION['user_id'], // Assuming user_id is stored in session
+            $_SESSION['user_id'],
             $item['item_name'],
             $item['category'],
             $item['brand'],
@@ -155,35 +168,26 @@ if (isset($_POST['claim'])) {
             $item['date_found'],
             $item['time_found'],
             $status,
-            $position // Use the fixed position value
+            $position
         );
         $insert_stmt->execute();
 
-        // Step 3: Delete the item from the approved_found_reports table
-        $delete_query = "DELETE FROM approved_found_reports WHERE id = ?";
-        $delete_stmt = $conn->prepare($delete_query);
-        $delete_stmt->bind_param("i", $report_id);
-        $delete_stmt->execute();
+        // delete from approved_found_reports
+        $delete_approved_query = "DELETE FROM approved_found_reports WHERE id = ?";
+        $delete_approved_stmt = $conn->prepare($delete_approved_query);
+        $delete_approved_stmt->bind_param("i", $report_id);
+        $delete_approved_stmt->execute();
 
-        // Set the success message
-        $successMessage = 'Your claim request for the item has been successfully submitted!';
+        // delete from pending_found_reports
+        $delete_pending_query = "DELETE FROM pending_found_reports WHERE id = ?";
+        $delete_pending_stmt = $conn->prepare($delete_pending_query);
+        $delete_pending_stmt->bind_param("i", $report_id);
+        $delete_pending_stmt->execute();
 
-        if ($stmt->execute()) {
-            $_SESSION['message'] = 'success'; // Success flag if needed
-            header('Location: userview.php?success=true'); // Redirect to trigger success modal
-            exit(); // Prevent further execution after redirect
-        } else {
-            error_log('SQL Error during execute: ' . $stmt->error);
-        }
-
-
-
-
-        // Redirect back to the user view page with the success message
-        header("Location: userview.php");
+        $_SESSION['message'] = 'Your claim request for the item has been successfully submitted!';
+        header("Location: userview.php?success=true");
         exit();
     } else {
-        // If item not found, show an error message
         echo "Item not found.";
     }
 }
@@ -539,6 +543,129 @@ if (isset($_POST['claim'])) {
     /* Hover effect on the button (optional, for visual feedback) */
     .dropdown-btn:hover {
         background-color: #ccc
+    }
+
+    .modal-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.7);
+        z-index: 999;
+    }
+
+    .modal-content1 {
+        background: white;
+        padding: 30px;
+        color: #545454;
+        border-radius: 10px;
+        border: 1px solid #888;
+        width: 400px;
+        max-width: 100%;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        animation: fadeIn 0.3s ease-out;
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+    }
+
+    .modal-title1 {
+        text-align: center;
+    }
+
+    .modal-title1 h3 {
+        font-size: 22px;
+        margin-bottom: 10px;
+        font-weight: bold;
+    }
+
+    .modal-title1 p {
+        margin-bottom: 15px;
+        font-size: 14px;
+        color: #666;
+    }
+
+    .confirmation-section {
+        margin-bottom: 20px;
+        padding: 15px;
+        background: #f9f9f9;
+        border-left: 4px solid #f39c12;
+        border-radius: 5px;
+    }
+
+    .confirmation-section h3 {
+        font-size: 18px;
+        font-weight: bold;
+        margin-bottom: 10px;
+    }
+
+    .confirmation-section p {
+        font-size: 14px;
+        line-height: 1.5;
+        color: #333;
+        margin-top: 5px;
+    }
+
+    .confirmation-form {
+        text-align: left;
+    }
+
+    .form-group {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 20px;
+    }
+
+    .checkbox-label {
+        cursor: pointer;
+        font-size: 14px;
+        color: #333;
+    }
+
+    .button-container {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 20px;
+    }
+
+    .btn-cancel {
+        padding: 10px 20px;
+        background-color: red;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+    }
+
+    .btn-cancel:hover {
+        background-color: darkred;
+    }
+
+    .btn-success {
+        padding: 10px 20px;
+        background-color: green;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+    }
+
+    .btn-success:hover {
+        background-color: darkgreen;
+    }
+
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+        }
+
+        to {
+            opacity: 1;
+        }
     }
 
     .modal-overlay {
@@ -1440,7 +1567,8 @@ if (isset($_POST['claim'])) {
             </div>
         </div>
         <div class="search-container">
-            <h2>Search Found Reports</h2>
+            <h2>Browse Found Items</h2>
+
             <hr class="hr-center">
 
             <form class="search-form">
@@ -1486,17 +1614,36 @@ if (isset($_POST['claim'])) {
                             <td><?= htmlspecialchars($row["category"]) ?></td>
                             <td><?= htmlspecialchars($row["location_found"]) ?></td>
                             <td>
-                                <!--    <a href="userfounddetailsaapprove.php?report_id=<?= htmlspecialchars($row["id"]) ?>" -->
-                                <a class="view-button" aria-label="View Details">View item</a>
+                                <a href="userfounddetailsaapprove.php?_id=<?= htmlspecialchars($row["id"]) ?>"
+                                    class="view-button">View</a>
+
                             </td>
                             <td><?= htmlspecialchars($row["status"]) ?></td>
                             <td>
+
+
+
                                 <!-- Claim Button -->
-                                <form action="" method="POST" style="display:inline;" onsubmit="return confirmClaim()">
+
+
+
+
+                                <form style="display:inline;">
+                                    <button type="button" class="btn btn-success" aria-label="Claim"
+                                        onclick="showClaimModal(<?php echo $row['id']; ?>)">Claim</button>
+                                </form>
+
+
+
+
+
+
+                                <!--           <form action="" method="POST" style="display:inline;" onsubmit="return confirmClaim()">
                                     <input type="hidden" name="report_id" value="<?php echo $row['id']; ?>">
                                     <button type="submit" class="btn btn-success" name="claim"
-                                        aria-label="Claim">Claim</button>
-                                </form>
+                                        aria-label="Claim">Proceed</button>
+                                </form>   -->
+
                             </td>
                         </tr>
                         <?php endwhile; ?>
@@ -1509,6 +1656,45 @@ if (isset($_POST['claim'])) {
                 </table>
             </div>
         </div>
+
+
+        <!-- confirmation modal -->
+        <div id="confirmationModal" class="modal-overlay" style="display: none;">
+            <div class="modal-content1">
+                <div class="modal-title1">
+                    <h3>Claim Confirmation</h3>
+                    <p>Please review the legal notice before proceeding with your claim.</p>
+                </div>
+                <hr>
+
+                <div class="confirmation-section">
+                    <h3>Important Notice</h3>
+                    <p><strong>WARNING:</strong> Providing false claims or attempting to claim an item that does not
+                        belong to you is a serious offense. Fraudulent claims may result in legal actions under
+                        <strong>Article 308 of the Revised Penal Code of the Philippines (Theft)</strong> and other
+                        applicable laws. You may face criminal charges, fines, and penalties.
+                    </p>
+                    <p>By proceeding, you confirm that you are the rightful owner of the item and that all provided
+                        information is truthful and accurate.</p>
+                </div>
+
+                <div class="form-group">
+                    <input type="checkbox" name="confirmation_agreement" id="confirmation_agreement" required>
+                    <label for="confirmation_agreement"><strong>I solemnly affirm that I am the rightful owner of this
+                            item and understand that any false claim will result in legal consequences.</strong></label>
+                </div>
+
+                <div class="button-container">
+                    <button type="button" class="btn-cancel" onclick="hideClaimModal()">Cancel</button>
+                    <button type="button" class="btn btn-success" onclick="submitClaim()"
+                        aria-label="Claim">Proceed</button>
+                </div>
+            </div>
+        </div>
+
+
+
+
         <p class="pagination-info">Showing <?php echo $currentEntriesStart; ?> to <?php echo $currentEntriesEnd; ?> of
             <?php echo $totalRecords; ?> entries</p>
         <!-- Pagination (optional) -->
@@ -1542,6 +1728,58 @@ if (isset($_POST['claim'])) {
             <p class="footer-text">&copy; University of Caloocan City, All rights reserved.</p>
         </div>
     </footer>
+
+    <script>
+    let savedReportId = null; // store the report ID globally
+
+    function showClaimModal(reportId) {
+        savedReportId = reportId; // save report id
+        document.getElementById("confirmationModal").style.display = "block";
+    }
+
+    function hideClaimModal() {
+        document.getElementById("confirmationModal").style.display = "none";
+    }
+
+    function submitClaim() {
+        if (!document.getElementById("confirmation_agreement").checked) {
+            alert("You must confirm that you are the rightful owner before proceeding.");
+            return;
+        }
+
+        // create a form dynamically to submit the claim
+        let form = document.createElement("form");
+        form.method = "POST";
+        form.action = ""; // submit to the current page
+
+        let input = document.createElement("input");
+        input.type = "hidden";
+        input.name = "report_id";
+        input.value = savedReportId;
+
+        let claimInput = document.createElement("input");
+        claimInput.type = "hidden";
+        claimInput.name = "claim";
+        claimInput.value = "1"; // simulate claim button being clicked
+
+        form.appendChild(input);
+        form.appendChild(claimInput);
+        document.body.appendChild(form);
+        form.submit();
+    }
+    </script>
+
+
+    <SCript>
+    function openModal(reportId) {
+        document.getElementById("confirmationModal").style.display = "block";
+        document.getElementById("report_id").value = reportId; // pass report ID to the modal form
+    }
+
+    function closeModal() {
+        document.getElementById("confirmationModal").style.display = "none";
+    }
+    </SCript>
     <script>
     // Function to close the modal by ID
     function closeModal(modalId) {
@@ -1588,15 +1826,6 @@ if (isset($_POST['claim'])) {
     </script>
     <script>
     // Function to ask the user for confirmation before submitting the form
-    function confirmClaim() {
-        // Show a confirmation dialog
-        var confirmClaim = confirm("Are you sure this item belongs to you?");
-        if (confirmClaim) {
-            return true; // Proceed with form submission
-        } else {
-            return false; // Prevent form submission
-        }
-    }
     </script>
     <script type="module" src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.esm.js"></script>
     <script nomodule src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.js"></script>

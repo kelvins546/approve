@@ -267,6 +267,25 @@ Lost' : 'Report');
         /* Dark yellow text */
     }
 
+    .report-status.on.user {
+        background-color: #ffc107;
+        /* Yellow */
+        color: #856404;
+        font-style: italic;
+        font-size: 11px;
+        /* Dark yellow text */
+    }
+
+    .report-status.on.staff {
+        background-color: #28a745;
+        /* Green */
+        color: #ffffff;
+        font-style: italic;
+        font-size: 11px;
+
+        /* White text */
+    }
+
     /* Claimed Status Style */
     .report-status.approved {
         background-color: #28a745;
@@ -1085,11 +1104,7 @@ Lost' : 'Report');
                             <input type="hidden" name="table" value="pending_found_reports">
 
                         </form>
-                        <form method="post" action="usersoloview.php">
-                            <input type="hidden" name="table" value="pending_found_reports">
-                            <input type="hidden" name="delete_id" value="<?= $row['id']; ?>">
-                            <button type="submit" class="btn-action btn-cancel">Cancel</button>
-                        </form>
+
                     </div>
                 </div>
                 <?php endwhile; ?>
@@ -1136,11 +1151,7 @@ Lost' : 'Report');
                             <input type="hidden" name="table" value="approved_found_reports">
 
                         </form>
-                        <form method="post" action="usersoloview.php">
-                            <input type="hidden" name="table" value="approved_found_reports">
-                            <input type="hidden" name="delete_id" value="<?= $row['id']; ?>">
-                            <button type="submit" class="btn-action btn-cancel">Cancel</button>
-                        </form>
+
                     </div>
                 </div>
                 <?php endwhile; ?>
@@ -1193,10 +1204,11 @@ Lost' : 'Report');
 
                         </form>
                         <form method="post" action="usersoloview.php">
-                            <input type="hidden" name="table" value="pending_lost_reports">
+                            <input type="hidden" name="table" value="approved_lost_reports">
                             <input type="hidden" name="delete_id" value="<?= $row['id']; ?>">
-                            <button type="submit" class="btn-action btn-cancel">Cancel</button>
+                            <button type="submit" class="btn-action btn-cancel">I FOUND ALREADY</button>
                         </form>
+
                     </div>
                 </div>
                 <?php endwhile; ?>
@@ -1246,7 +1258,7 @@ Lost' : 'Report');
                         <form method="post" action="usersoloview.php">
                             <input type="hidden" name="table" value="approved_lost_reports">
                             <input type="hidden" name="delete_id" value="<?= $row['id']; ?>">
-                            <button type="submit" class="btn-action btn-cancel">Cancel</button>
+                            <button type="submit" class="btn-action btn-cancel">I FOUND ALREADY</button>
                         </form>
                     </div>
                 </div>

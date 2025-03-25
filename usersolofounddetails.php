@@ -95,90 +95,62 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 }
 
 
-//edit
-// Check if report_id is provided and is a valid integer
+// check if report_id is provided and valid
 if (isset($_GET['report_id']) && filter_var($_GET['report_id'], FILTER_VALIDATE_INT)) {
     $report_id = $_GET['report_id'];
 
-    // Fetch the existing data for editing
+    // fetch the existing data
     $sql = "SELECT * FROM pending_found_reports WHERE id = ?";
     $stmt = $conn->prepare($sql);
     $stmt->bind_param("i", $report_id);
     $stmt->execute();
     $result = $stmt->get_result();
 
-    // If the record exists, fetch the data
     if ($result->num_rows > 0) {
         $row = $result->fetch_assoc();
     } else {
-        // If no record is found, show an error message
-        $message = 'Item not found or invalid ID.';
+        $message = 'item not found or invalid ID.';
     }
 } else {
-    $message = 'Invalid ID or missing parameter.';
+    $message = 'invalid ID or missing parameter.';
 }
-// Update action
-if (isset($_POST['item_name']) && isset($_POST['date_found'])) {
-    $item_name = $_POST['item_name'];
-    $date_found = $_POST['date_found'];
-    $category = $_POST['category'];
-    $time_found = $_POST['time_found'];
-    $brand = $_POST['brand'] ?: null; // Handle optional fields
-    $location_found = $_POST['location_found'];
-    $primary_color = $_POST['primary_color'] ?: null;
+
+// update action
+if (isset($_POST['description'])) { // check only description
     $description = $_POST['description'];
+    $report_id = $_POST['report_id']; // get report_id from form
 
-
-    // File upload handling
+    // file upload handling
     if (isset($_FILES['picture']) && $_FILES['picture']['error'] == 0) {
-        // Sanitize file name
         $file_tmp = $_FILES['picture']['tmp_name'];
-        $file_name = basename($_FILES['picture']['name']); // Get the base name
+        $file_name = basename($_FILES['picture']['name']);
         $file_path = 'uploads/' . $file_name;
 
-        // Move uploaded file
-        if (move_uploaded_file($file_tmp, $file_path)) {
-            // File uploaded successfully
-        } else {
-            echo "Failed to upload the file.";
+        if (!move_uploaded_file($file_tmp, $file_path)) {
+            echo "failed to upload the file.";
             exit;
         }
     } else {
-        // If no new picture, use the existing picture
-        $file_path = $item['picture'];
+        // use existing picture if no new upload
+        $file_path = $row['picture'];
     }
 
-    // Update query
-    $update_sql = "UPDATE pending_found_reports SET 
-                    item_name = ?, date_found = ?, category = ?, time_found = ?, 
-                    brand = ?, location_found = ?, primary_color = ?, description = ?, 
-                     picture = ? 
-                    WHERE id = ?";
-
+    // update query
+    $update_sql = "UPDATE pending_found_reports SET description = ?, picture = ? WHERE id = ?";
     $stmt = $conn->prepare($update_sql);
-    // Correct the bind_param to match 13 placeholders
-    $stmt->bind_param(
-        "sssssssssi", // 13 parameters (1 for each field)
-        $item_name,
-        $date_found,
-        $category,
-        $time_found,
-        $brand,
-        $location_found,
-        $primary_color,
-        $description,
 
-        $file_path,
-        $report_id
-    );
+    // bind the correct number of parameters
+    $stmt->bind_param("ssi", $description, $file_path, $report_id);
 
     if ($stmt->execute()) {
-        echo "<script>alert('Report updated successfully.'); </script>";
+        echo "<script>alert('report updated successfully.'); </script>";
     } else {
-        echo "<script>alert('Failed to update report.');</script>";
+        echo "<script>alert('failed to update report.');</script>";
     }
+
     $stmt->close();
 }
+
 
 $userId = $_SESSION['user_id'];
 
@@ -1551,104 +1523,10 @@ $conn->close();
                 <hr>
 
                 <form method="POST" action="" enctype="multipart/form-data">
-                    <!-- Object Title | Date Found -->
+                    <input type="hidden" name="report_id" value="<?= $row['id'] ?? '' ?>">
+
                     <div class="form-row2">
-                        <div class="form-group">
-                            <label for="item_name2">Object Title</label>
-                            <input type="text" name="item_name" id="item_name2" required
-                                value="<?= htmlspecialchars($row['item_name'] ?? '') ?>" class="form-control2">
-                            <p>eg. lost camera, gold ring, toyota car key</p>
-                        </div>
 
-
-                        <div class="form-group2">
-                            <label for="date_found2">Date Loss</label>
-                            <input type="date" name="date_found" id="date_found2" required
-                                value="<?= htmlspecialchars($row['date_found'] ?? '') ?>" class="form-control2">
-                        </div>
-                    </div>
-
-                    <!-- Category | Time Found -->
-                    <div class="form-row2">
-                        <div class="form-group2">
-                            <label for="category2">Category</label>
-                            <select name="category" id="category2" required>
-                                <option value="Electronics & Gadgets"
-                                    <?= $row['category'] == 'Electronics & Gadgets' ? 'selected' : '' ?>>Electronics &
-                                    Gadgets</option>
-                                <option value="Jewelry & Accessories"
-                                    <?= $row['category'] == 'Jewelry & Accessories' ? 'selected' : '' ?>>Jewelry &
-                                    Accessories</option>
-                                <option value="Identification & Documents"
-                                    <?= $row['category'] == 'Identification & Documents' ? 'selected' : '' ?>>
-                                    Identification & Documents</option>
-                                <option value="Clothing & Footwear"
-                                    <?= $row['category'] == 'Clothing & Footwear' ? 'selected' : '' ?>>Clothing &
-                                    Footwear</option>
-                                <option value="Bag & Carriers"
-                                    <?= $row['category'] == 'Bag & Carriers' ? 'selected' : '' ?>>Bag & Carriers
-                                </option>
-                                <option value="Wallet & Money"
-                                    <?= $row['category'] == 'Wallet & Money' ? 'selected' : '' ?>>Wallet & Money
-                                </option>
-
-                            </select>
-                        </div>
-
-                        <div class="form-group2">
-                            <label for="time_found2">Time Loss</label>
-                            <input type="time" name="time_found" id="time_found2" required
-                                value="<?= htmlspecialchars($row['time_found'] ?? '') ?>" class="form-control2">
-                        </div>
-                    </div>
-
-                    <!-- Brand | Location Found -->
-                    <div class="form-row2">
-                        <div class="form-group2">
-                            <label for="brand2">Brand</label>
-                            <input type="text" name="brand" id="brand2"
-                                value="<?= htmlspecialchars($row['brand'] ?? '') ?>">
-                            <p> (Ralph Lauren, Samsung, KithenAid, etc.)</p>
-                        </div>
-
-                        <div class="form-group2">
-                            <label for="location_found2">Location Found</label>
-                            <select name="location_found" id="location_found2" required>
-                                <option value="Main Entrance Hall"
-                                    <?= $row['location_found'] == 'Main Entrance Hall' ? 'selected' : '' ?>>Main
-                                    Entrance Hall</option>
-                                <option value="Food Court"
-                                    <?= $row['location_found'] == 'Food Court' ? 'selected' : '' ?>>Food Court</option>
-                                <option value="Parking Area A"
-                                    <?= $row['location_found'] == 'Parking Area A' ? 'selected' : '' ?>>Parking Area A
-                                </option>
-                                <option value="Restroom - East Wing"
-                                    <?= $row['location_found'] == 'Restroom - East Wing' ? 'selected' : '' ?>>Restroom -
-                                    East Wing</option>
-                                <option value="Info Center"
-                                    <?= $row['location_found'] == 'Info Center' ? 'selected' : '' ?>>Info Center
-                                </option>
-                                <option value="Gift Shop"
-                                    <?= $row['location_found'] == 'Gift Shop' ? 'selected' : '' ?>>Gift Shop</option>
-                                <option value="Amusement Arcade"
-                                    <?= $row['location_found'] == 'Amusement Arcade' ? 'selected' : '' ?>>Amusement
-                                    Arcade</option>
-
-
-                            </select>
-                        </div>
-                    </div>
-
-                    <!-- Primary Color | Image -->
-                    <div class="form-row2">
-                        <div class="form-group2">
-                            <label for="primary_color2">Primary Color</label>
-                            <input type="text" name="primary_color" id="primary_color2"
-                                value="<?= htmlspecialchars($row['primary_color'] ?? '') ?>">
-
-                            <p>Please add the color that best represents the lost property(Black, Red, Blue, etc.)
-                            </p>
-                        </div>
 
                         <div class="form-group2">
                             <label for="picture2">Image</label>
@@ -1667,7 +1545,7 @@ $conn->close();
                         </div>
 
                     </div>
-                    <!-- Contact Information -->
+
 
 
 
@@ -1680,7 +1558,7 @@ $conn->close();
     <footer class="footer">
         <div class="footer-content">
             <div class="footer-logo">
-                <img src="images/star.png" alt="Logo" />
+
             </div>
             <div class="all-links">
                 <nav class="footer-others">

@@ -1081,7 +1081,7 @@ Lost' : 'Report');
 
                     <!-- Report Buttons -->
                     <div class="report-buttons">
-                        <a href="usersolopendingclaimdetails.php?report_id=<?= $row['id'] ?>" class="btn-action">View
+                        <a href="" class="btn-action">View
                             Item</a>
                         <form method="get" action="usersolopendingclaimdetails.php">
                             <input type="hidden" name="action" value="edit">

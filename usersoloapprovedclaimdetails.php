@@ -1679,7 +1679,7 @@ $conn->close();
     <footer class="footer">
         <div class="footer-content">
             <div class="footer-logo">
-                <img src="images/star.png" alt="Logo" />
+               
             </div>
             <div class="all-links">
                 <nav class="footer-others">

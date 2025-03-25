@@ -365,7 +365,7 @@ $total_notifications = $claim_count + $found_count + $lost_count;
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pending Claim Reports</title>
+    <title>Pending Claim Request</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
@@ -1543,7 +1543,7 @@ $total_notifications = $claim_count + $found_count + $lost_count;
 
         </div>
         <div class="search-container">
-            <h2>Pending Claim Reports</h2>
+            <h2>Pending Claim Requests</h2>
             <hr class="hr-center">
 
             <form class="search-form">

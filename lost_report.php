@@ -1,10 +1,24 @@
 <?php
-// Error Reporting
+// Error Reportin
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
 // Start Session
 session_start();
+
+
+
+
+// Check if logout is requested
+if (isset($_GET['logout'])) {
+    // Destroy session
+    session_unset();
+    session_destroy();
+
+    // Redirect to login page
+    header("Location: login.php");
+    exit;
+}
 
 // Database Configuration
 $servername = "localhost";
@@ -44,33 +58,23 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $user_id = $_SESSION['user_id'];
     $item_name = $conn->real_escape_string($_POST['item_name'] ?? '');
     $category = $conn->real_escape_string($_POST['category'] ?? '');
-    $item_details = $conn->real_escape_string($_POST['item_details'] ?? '');
+    $item_details = $conn->real_escape_string($_POST['description'] ?? '');
     $location_found = $conn->real_escape_string($_POST['location_found'] ?? '');
     $date_found = $_POST['date_found'] ?? '';
     $time_found = $_POST['time_found'] ?? '';
-    $first_name = $conn->real_escape_string($_POST['first_name'] ?? '');
-    $last_name = $conn->real_escape_string($_POST['last_name'] ?? '');
-    $phone_number = $conn->real_escape_string($_POST['phone_number'] ?? '');
-    $email = $conn->real_escape_string($_POST['email'] ?? '');
-    $primary_color = $conn->real_escape_string($_POST['primary_color'] ?? '');
-    $brand = $conn->real_escape_string($_POST['brand'] ?? '');
-    $description = $conn->real_escape_string($_POST['description'] ?? '');
-    $tip = $conn->real_escape_string($_POST['tip'] ?? ''); // Tip as a string
     $picture = null;
 
+    // Handle additional fields
+    $brand = $conn->real_escape_string($_POST['brand'] ?? '');
+    $primary_color = $conn->real_escape_string($_POST['primary_color'] ?? '');
+    $description = $conn->real_escape_string($_POST['description'] ?? '');
     // If "Other" is selected, override the category with the "other_category" field value
     if ($category === 'Other' && !empty($other_category)) {
         $category = $other_category;
     }
 
-
-    // Validation
-    if (
-        empty($item_name) || empty($category) || empty($location_found) ||
-        empty($date_found) || empty($time_found) || empty($first_name) ||
-        empty($last_name) || empty($phone_number) || empty($email) ||
-        empty($primary_color) || empty($brand) || empty($description)
-    ) {
+    // Comment out or remove validation for now
+    if (empty($item_name) || empty($category) || empty($location_found) || empty($date_found) || empty($time_found)) {
         $message = "<div class='alert alert-danger'>Please fill out all required fields.</div>";
     } else {
         // File Upload
@@ -93,54 +97,52 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $message = "<div class='alert alert-danger'>File upload error. Code: " . $_FILES['picture']['error'] . "</div>";
             }
         }
+    }
 
-        // Database Insertion
-        $sql = "INSERT INTO pending_lost_reports (
-                    user_id, item_name, category, description, picture, location_found, 
-                    date_found, time_found, first_name, last_name, phone_number, email, status, brand, primary_color, tip
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Unclaimed', ?, ?, ?)";
+    // SQL Query
+    $sql = "INSERT INTO pending_lost_reports 
+            (user_id, item_name, category, description, brand, primary_color, picture, location_found, date_found, time_found, status) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Lost')";
 
-        $stmt = $conn->prepare($sql);
-        if ($stmt) {
-            // Bind Parameters
-            $stmt->bind_param(
-                "issssssssssssss", // 's' added for tip as a string
-                $user_id,
-                $item_name,
-                $category,
-                $description,
-                $picture,
-                $location_found,
-                $date_found,
-                $time_found,
-                $first_name,
-                $last_name,
-                $phone_number,
-                $email,
-                $brand,
-                $primary_color,
-                $tip
-            );
-            // Execute Query
-            if ($stmt->execute()) {
-                $_SESSION['message'] = 'success';
-                echo "<script>
-                        window.onload = function() {
-                            document.getElementById('successModal').style.display = 'block';
-                        }
-                      </script>";
-            } else {
-                error_log("SQL Error during execute: " . $stmt->error);
-                $message = "<div class='alert alert-danger'>Failed to submit report. Please try again. SQL Error: " . $stmt->error . "</div>";
-            }
+    // Prepare statement
+    $stmt = $conn->prepare($sql);
 
-            $stmt->close();
+    // Check if prepare() fails
+    if ($stmt === false) {
+        error_log("SQL Error: " . $conn->error . " - Query: " . $sql); // Log the SQL error and query
+        $message = "<div class='alert alert-danger'>SQL Error: " . $conn->error . "</div>";
+    } else {
+        // Bind Parameters
+        $stmt->bind_param(
+            "isssssssss",  // 10 placeholders (adjust as needed for your database types)
+            $user_id,
+            $item_name,
+            $category,
+            $item_details,
+            $brand,
+            $primary_color,
+            $picture,
+            $location_found,
+            $date_found,
+            $time_found
+        );
+
+        // Execute Query for the report submission
+        if ($stmt->execute()) {
+            $_SESSION['message'] = 'report submitted successfully!'; // Success flag if needed
+            header('Location: lost_report.php?success=true'); // Redirect to trigger success modal
+            exit(); // Prevent further execution after redirect
         } else {
-            error_log("SQL Error during preparation: " . $conn->error);
-            $message = "<div class='alert alert-danger'>SQL Error: " . $conn->error . "</div>";
+            error_log('SQL Error during execute: ' . $stmt->error);
         }
     }
 }
+
+
+
+
+
+// Get user name for greeting
 $userName = htmlspecialchars($_SESSION['name'] ?? 'User');
 
 //start deleting here to remove the count on see details
@@ -185,7 +187,9 @@ function countUserReports($conn, $userId)
     return 0; // Default to 0 if query fails
 }
 
-// Display Message
+
+
+
 if (isset($_SESSION['message'])) {
     $message = $_SESSION['message'];
     unset($_SESSION['message']);
@@ -195,11 +199,13 @@ if (isset($_SESSION['message'])) {
 $currentPage = basename($_SERVER['PHP_SELF']);
 
 // Set the button label based on the current page
-$buttonLabel = ($currentPage === 'found_report.php') ? 'Report Found' : (($currentPage === 'lost_report.php') ? 'Report Lost' : 'Report');
+$buttonLabel = ($currentPage === 'found_report.php') ? 'I found an item' : (($currentPage === 'lost_report.php') ? 'I lost an item' : 'Report');
 
-// Close Connection
 $conn->close();
 ?>
+
+
+
 
 
 <!DOCTYPE html>
@@ -215,926 +221,884 @@ $conn->close();
         href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:ital,wght@0,100..900;1,100..900&family=Londrina+Outline&family=Open+Sans:ital,wght@0,300..800;1,300..800&family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&family=Rubik+80s+Fade&family=Rubik+Burned&family=Source+Code+Pro:ital,wght@0,200..900;1,200..900&display=swap"
         rel="stylesheet">
     <style>
-    * {
-        box-sizing: border-box;
-        margin: 0;
-        padding: 0;
-        font-family: 'Hanken Grotesk', Arial, sans-serif;
-    }
+        @import url('https://fonts.googleapis.com/css2?family=League+Spartan:wght@100..900&family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap');
 
-    body {
-        background-color: #fff;
-        margin: 0;
-        padding: 0;
-        overflow-x: hidden;
-        display: flex;
-        color: #545454;
-        flex-direction: column;
-        min-height: 100vh;
-        background-color: #fff;
-    }
-
-    /* Navbar styles */
-    .navbar {
-        background-color: #fff;
-        padding: 10px;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        color: #545454;
-        position: sticky;
-        top: 0;
-        z-index: 10;
-        width: 100%;
-        display: flex;
-        align-items: center;
-        /* Center items vertically */
-        justify-content: space-between;
-        /* Distribute space between items */
-    }
-
-    /* Navigation main container */
-    .nav-main {
-        display: flex;
-        align-items: center;
-        /* Center items vertically */
-        gap: 20px;
-    }
-
-    .nav-content {
-        background-image: url('images/f1.png');
-        background-size: cover;
-        background-position: center center;
-        background-attachment: fixed;
-        background-repeat: no-repeat;
-        padding: 60px 0;
-
-
-    }
-
-    .nav-content-cont {
-        display: flex;
-        flex-direction: column;
-        align-items: flex-start;
-        margin-left: 70px;
-
-    }
-
-    .nav-main {
-        display: flex;
-        align-items: center;
-        gap: 20px;
-
-        /* Add some spacing between nav-main and nav-content */
-    }
-
-    .nav-btn {
-        background-color: transparent;
-        color: #545454;
-        border: none;
-        font-size: 16px;
-        margin-top: 12px;
-        margin-left: 30px;
-        cursor: pointer;
-        text-align: center;
-        display: inline-block;
-        transition: color 0.3s ease, text-decoration 0.3s ease;
-    }
-
-    /* Hover effect on button */
-    .nav-btn:hover {
-
-        text-decoration: underline;
-    }
-
-    .icon-btn {
-        background-color: #f4f5f6;
-        border: 2px solid #000;
-        border-radius: 50%;
-        cursor: pointer;
-        padding: 3px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        margin-left: 20px;
-        /* Adjust this value as needed */
-        transition: background-color 0.3s ease, border-color 0.3s ease;
-        z-index: 99999;
-        position: relative;
-        /* Enable relative positioning */
-        right: -100px;
-    }
-
-
-    .icon-btn {
-        z-index: 99999;
-        margin-left: auto;
-        width: 40px;
-        /* Set to desired size */
-        height: 40px;
-    }
-
-
-
-
-    .nav-main>.icon-btn:hover {
-        background-color: #f4f4f9;
-        /* Light background on hover */
-        border-color: #000;
-        /* Darker border on hover */
-    }
-
-
-
-    .nav-main>.icon-btn:hover .user-icon {
-        color: #000;
-        /* Darker icon color on hover */
-    }
-
-    .user-icon {
-        font-size: 24px;
-        /* Icon size */
-        color: #545454;
-        transition: color 0.3s ease;
-        /* Smooth color change on hover */
-    }
-
-    .user-icon:hover {
-        color: #545454;
-        /* Darken color on hover */
-    }
-
-    .navbar-links {
-        margin-left: 100px;
-        margin-right: 90px;
-    }
-
-    .navbar-links a {
-        color: #545454;
-        padding: 3px;
-        text-decoration: none;
-        margin: 20px;
-        display: inline-block;
-
-    }
-
-    .navbar-links a:hover {
-        text-decoration: underline;
-    }
-
-    .navbar-logo {
-        height: 90px;
-        width: auto;
-        margin-right: 0px;
-        margin-left: 30px;
-        margin-top: 0;
-    }
-
-    .navbar-text {
-        font-family: "Times New Roman", Times, serif;
-        font-size: 36px;
-        font-weight: bold;
-        white-space: nowrap;
-        color: #000 !important;
-        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
-
-    }
-
-    .LAFh1 {
-        font-family: "League Spartan", sans-serif;
-        font-optical-sizing: auto;
-        font-weight: bold;
-    }
-
-    .nav-title h1 {
-        font-size: 78px;
-        color: #f6efe0;
-        font-style: italic;
-        font-weight: bold;
-        line-height: 1.1;
-        width: 700px;
-        font-family: 'Hanken Grotesk', Arial, sans-serif;
-
-
-    }
-
-    .nav-text p {
-        font-size: 16px;
-        color: #fff;
-        line-height: 1.4;
-        margin-bottom: 20px;
-
-    }
-
-    .modal-overlay {
-        display: none;
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background-color: rgba(0, 0, 0, 0.7);
-        z-index: 999;
-    }
-
-    .modal-content2 {
-        background-color: #fefefe;
-        padding: 30px;
-        color: #545454;
-        border-radius: 10px;
-        border: 1px solid #fefefe;
-        width: 200px;
-        max-width: 100%;
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-        animation: fadeIn 0.3s ease-out;
-        margin-bottom: 0px;
-        position: absolute;
-        top: 23%;
-        right: 0;
-        transform: translate(-50%, -50%);
-        padding-top: 20px;
-
-    }
-
-    /* Adding the arrow */
-    .modal-content2::after {
-        content: "";
-        position: absolute;
-        top: 5px;
-        /* Position the arrow vertically */
-        right: -10px;
-        /* Place the arrow to the right side of the modal */
-        width: 0;
-        height: 0;
-        border-top: 10px solid transparent;
-        /* Transparent top edge */
-        border-bottom: 10px solid transparent;
-        /* Transparent bottom edge */
-        border-left: 10px solid #fff;
-        /* The arrow color matches the modal background */
-        z-index: 1000;
-        /* Ensures it appears above other elements */
-    }
-
-    /* Style for the close button */
-    .close-btn {
-        position: absolute;
-        top: 0px;
-        /* Adjust based on your design */
-        right: 10px;
-        /* Adjust based on your design */
-        background: transparent;
-        border: none;
-        font-size: 18px;
-        font-weight: bold;
-        cursor: pointer;
-        color: #333;
-        /* Change color to match your theme */
-    }
-
-    .modal-title2 {
-        display: inline;
-        text-align: center;
-    }
-
-    .modal-title2 h3 {
-        margin-bottom: 2px;
-        font-size: 17px;
-    }
-
-    .modal-title2 p {
-        margin-bottom: 2px;
-        font-size: 14px;
-    }
-
-    .butclass {
-        display: flex;
-        /* Enables flexbox */
-        flex-direction: column;
-        /* Align items vertically */
-        align-items: center;
-        /* Center items horizontally */
-        gap: 10px;
-        /* Adds spacing between the buttons */
-        margin-top: 20px;
-        /* Optional: add some spacing above the buttons */
-    }
-
-    .btn-ok2 {
-        padding: 5px 20px;
-        color: #545454;
-        border: none;
-        border-radius: 0px;
-        cursor: pointer;
-        margin-bottom: 10px;
-        text-align: center;
-        border: 2px solid #545454;
-
-        /* Allow the button to resize based on content */
-        width: 120px;
-        /* Optional: Ensure buttons have consistent size */
-    }
-
-    .btn-ok2:hover {
-        background-color: #ccc;
-    }
-
-
-    .close-btn:hover {
-        color: #f00;
-        /* Optional: Add hover effect */
-    }
-
-
-    ul {
-        margin-left: 30px;
-        margin-top: 5px;
-        font-size: 14px;
-    }
-
-    .modal-overlay {
-        display: none;
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background-color: rgba(0, 0, 0, 0.7);
-        z-index: 999;
-    }
-
-    .modal-content {
-        background-color: #fefefe;
-        padding: 30px;
-        color: #545454;
-        border-radius: 10px;
-        border: 1px solid #888;
-        width: 400px;
-        max-width: 100%;
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-        animation: fadeIn 0.3s ease-out;
-        margin-bottom: 0px;
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-    }
-
-    .modal-title {
-        display: inline;
-        text-align: center;
-    }
-
-    .modal-title h3 {
-        margin-bottom: 10px;
-        font-size: 22px;
-    }
-
-    .modal-title p {
-        margin-bottom: 15px;
-    }
-
-    .modal-cont {
-        font-size: 14px;
-    }
-
-    .modal-ques {
-        margin-bottom: 5px;
-        margin-top: 25px;
-    }
-
-    @keyframes fadeIn {
-        0% {
-            opacity: 0;
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Hanken Grotesk', Arial, sans-serif;
         }
 
-        100% {
-            opacity: 1;
+        body {
+            background-color: #fff;
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+            display: flex;
+            color: #545454;
+            flex-direction: column;
+            min-height: 100vh;
+            background-color: #2b4257;
         }
-    }
-
-    .italic {
-        font-style: italic;
-        color: #545454;
-    }
-
-    .button-container {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        width: 100%;
-        margin-top: 20px;
-    }
-
-    .btn-ok {
-        padding: 5px 40px;
-        background-color: #4CAF50;
-        color: white;
-        border: none;
-        border-radius: 5px;
-        cursor: pointer;
-    }
-
-    .btn-ok:hover {
-        background-color: #45a049;
-    }
-
-
-    /* Dropdown button styles */
-
-    .dropdown {
-        position: relative;
-        display: inline-block;
-        margin-bottom: 10px;
-        z-index: 1;
-    }
-
-    /* Dropdown Button */
-    .dropdown-btn {
-        padding: 5px 20px;
-        background-color: #ff7701;
-        color: #fff;
-        border: none;
-        border-radius: 10px;
-        cursor: pointer;
-        font-size: 16px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        transition: background-color 0.3s ease;
-    }
-
-    /* Dropdown Arrow */
-    .dropdown-btn::after {
-        content: '';
-        width: 0;
-        height: 0;
-        border-top: 5px solid transparent;
-        border-bottom: 5px solid transparent;
-        border-left: 5px solid #fff;
-
-        margin-left: 10px;
-        transition: transform 0.3s ease;
-        transform: rotate(270deg);
-    }
-
-    /* Dropdown Content */
-    .dropdown-content {
-        display: none;
-        position: absolute;
-        background-color: #ff7701;
-        min-width: 180px;
-        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
-        z-index: 1;
-        margin-top: 0;
-        border-radius: 4px;
-        left: 0 !important;
-        right: auto;
-
-    }
-
-
-
-    /* Show Dropdown Content on Hover */
-    .dropdown:hover .dropdown-content {
-        display: block;
-    }
-
-    /* Dropdown Links */
-    .dropdown-content a {
-        padding: 10px 16px;
-        text-decoration: none;
-        display: block;
-        color: #fff;
-        /* Link text color */
-        transition: background-color 0.3s ease;
-    }
-
-    /* Dropdown Links Hover Effect */
-    .dropdown-content a:hover {
-        background-color: #e66a00;
-        /* Darker hover background color */
-    }
-
-    /* Rotate Arrow on Hover */
-    .dropdown:hover .dropdown-btn::after {
-        transform: rotate(90deg);
-        /* Rotate arrow */
-    }
-
-    /* Button Hover Effect */
-    .dropdown-btn:hover {
-        background-color: #e66a00;
-        /* Darker hover background color */
-    }
-
-    /* Dropdown Content */
-    .dropdown-content1 {
-        display: none;
-        position: absolute;
-        background-color: #fff;
-        min-width: 180px;
-        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
-        z-index: 1;
-        margin-top: 0;
-        border-radius: 4px;
-        left: 0 !important;
-        right: auto;
-
-    }
-
-
-
-    /* Show Dropdown Content on Hover */
-    .dropdown:hover .dropdown-content1 {
-        display: block;
-    }
-
-    /* Dropdown Links */
-    .dropdown-content1 a {
-        padding: 5px 5px;
-        text-decoration: none;
-        display: block;
-        color: #333;
-        /* Link text color */
-        transition: background-color 0.3s ease;
-    }
-
-    /* Dropdown Links Hover Effect */
-    .dropdown-content1 a:hover {
-        background-color: #ccc;
-        /* Darker hover background color */
-    }
-
-
-
-    .LAFh1 {
-        font-family: "League Spartan", sans-serif;
-        font-optical-sizing: auto;
-        font-weight: bold;
-    }
-
-    .nav-title h1 {
-        font-size: 78px;
-        color: #f6efe0;
-        font-style: italic;
-        font-weight: bold;
-        line-height: 1.1;
-        width: 700px;
-        font-family: 'Hanken Grotesk', Arial, sans-serif;
-
-
-    }
-
-    .nav-text p {
-        font-size: 16px;
-        color: #fff;
-        line-height: 1.4;
-        margin-bottom: 20px;
-
-    }
-
-    ul {
-        margin-left: 30px;
-        margin-top: 5px;
-        font-size: 14px;
-    }
-
-    .container {
-        max-width: 100%;
-        width: 80%;
-        margin: 1px;
-        background-color: #ffffff;
-        padding: 40px 40px;
-        border-radius: 2px;
-        box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
-        box-sizing: border-box;
-        z-index: 0;
-        margin-top: 925px;
-        margin-bottom: 350px;
-    }
-
-    .container-wrapper {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        height: 100vh;
-        margin-top: 0;
-        margin-bottom: 0;
-        background-color: #fff;
-    }
-
-    .container-title {
-        display: flex;
-        align-items: flex-end;
-        justify-content: flex-start;
-    }
-
-    .container-title2 h2 {
-        margin: 0;
-        font-size: 24px;
-        color: #333;
-    }
-
-    .container-title h2 {
-        margin: 0;
-        font-size: 24px;
-        color: #333;
-        line-height: 1.2;
-    }
-
-    .container-title p {
-        margin: 0;
-        font-size: 13px;
-        color: #777;
-        margin-left: 10px;
-        line-height: 1.6;
-        display: inline-block;
-        vertical-align: middle;
-    }
-
-    hr {
-        margin-bottom: 20px;
-        margin-top: 10px;
-    }
-
-    .alert {
-        padding: 10px;
-        margin-bottom: 20px;
-        border-radius: 5px;
-        text-align: center;
-        font-size: 14px;
-    }
-
-    .alert-success {
-        background-color: #d4edda;
-        color: #155724;
-    }
-
-    .alert-danger {
-        background-color: #f8d7da;
-        color: #721c24;
-    }
-
-    .form-group {
-        margin-bottom: 15px;
-        flex: 1;
-    }
-
-    .form-group p {
-        font-size: 13px;
-        color: #777;
-        margin-top: 5px;
-    }
-
-    input[type="checkbox"] {
-        width: 15px;
-        height: 15px;
-        vertical-align: middle;
-        margin-right: 4px;
-        appearance: none;
-        border: 1px solid #545454;
-        border-radius: 0;
-        background-color: #fff;
-        cursor: pointer;
-        outline: none;
-        display: inline-block;
-        position: relative;
-    }
-
-    input[type="checkbox"]:checked {
-        background-color: #fdd400;
-        border-color: #545454;
-    }
-
-    input[type="checkbox"]:checked::before {
-        content: "✓";
-        position: absolute;
-        top: 0;
-        left: 2px;
-        font-size: 12px;
-        font-weight: bold;
-        text-align: center;
-        color: #333;
-    }
-
-    input[type="checkbox"]:hover {
-        border-color: #333;
-    }
-
-    label.terms {
-        font-size: 14px;
-        display: flex;
-        align-items: flex-end;
-        gap: 5px;
-        color: #777;
-        flex-wrap: nowrap;
-    }
-
-    .terms-link {
-        text-decoration: none;
-        color: #333;
-        font-style: italic;
-    }
-
-    .terms-link:hover {
-        text-decoration: underline;
-    }
-
-    .align-container {
-        display: flex;
-        align-items: flex-end;
-        justify-content: space-between;
-        margin-top: 40px;
-    }
-
-    .btn {
-        color: #545454;
-        background-color: #fdd400;
-        border: 2px solid #545454;
-        border-radius: 4px;
-        text-align: center;
-        cursor: pointer;
-        width: 100px;
-        height: 40px;
-        font-size: 14px;
-        transition: background-color 0.3s ease;
-        line-height: normal;
-        display: inline-block;
-    }
-
-    label {
-        display: block;
-        margin-bottom: 8px;
-        font-weight: normal;
-        color: #333;
-    }
-
-    input[type="text"],
-    input[type="number"],
-    input[type="date"],
-    input[type="time"],
-    textarea,
-    select {
-        width: 100%;
-        padding: 6px;
-        box-sizing: border-box;
-        border: 1px solid #ccc;
-        border-radius: 0px;
-        font-size: 14px;
-    }
-
-    textarea {
-        resize: vertical;
-    }
-
-    .form-row {
-        display: flex;
-        justify-content: space-between;
-        gap: 4%;
-    }
-
-    .form-row .form-group {
-        width: 48%;
-    }
-
-    .form-row-submit {
-        display: flex;
-        justify-content: space-between;
-        gap: 4%;
-        align-items: flex-end;
-    }
-
-    .form-row-submit .form-group {
-        width: 48%;
-    }
-
-    .btn {
-        display: block;
-        align-items: center;
-        color: #fff;
-        background-color: #545454;
-        border: 2px solid #545454;
-        margin-left: auto;
-        margin-right: 0;
-        border-radius: 4px;
-        text-align: center;
-        cursor: pointer;
-        width: 180px;
-        height: 35px;
-        font-size: 14px;
-        transition: background-color 0.3s ease;
-    }
-
-    .btn:hover {
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-    }
-
-    /* Footer */
-    .footer {
-        background-color: #fff;
-        padding: 20px 0;
-        color: #545454;
-        font-family: 'Hanken Grotesk', sans-serif;
-        width: 100%;
-        display: flex;
-        flex-direction: column;
-        justify-content: flex-end;
-        position: relative;
-        text-align: center;
-        margin-top: 600px;
-    }
-
-    .footer-content {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        /* Space out logo and contact text */
-        width: 90%;
-        margin: 0 auto;
-        padding-bottom: 20px;
-    }
-
-    .footer-logo {
-        align-self: flex-start;
-        margin-top: 25px;
-    }
-
-    .footer-logo img {
-        max-width: 70px;
-    }
-
-
-    .footer-contact {
-        text-align: right;
-        /* Align text to the right */
-        font-size: 14px;
-        margin-left: auto;
-        width: 20%;
-        margin-bottom: 25px;
-    }
-
-    .footer-contact h4 {
-        font-size: 18px;
-        margin-bottom: 10px;
-    }
-
-    .footer-contact p {
-        font-size: 14px;
-        margin-top: 0;
-
-    }
-
-    .all-links {
-        display: flex;
-
-        width: 100%;
-        margin-top: 20px;
-        position: absolute;
-
-        justify-content: center;
-    }
-
-    .footer-others {
-        display: flex;
-        justify-content: center;
-        /* Align links in the center */
-        gap: 30px;
-        top: 190px;
-        left: 30%;
-        margin-left: 140px;
-        margin-top: 20px;
-        transform: translateX(-50%);
-    }
-
-
-    .footer-others a {
-        color: #545454;
-        text-decoration: none;
-        font-size: 14px;
-    }
-
-    .footer-separator {
-        width: 90%;
-        height: 1px;
-        background-color: #545454;
-        margin: 10px auto;
-        border: none;
-        position: absolute;
-        bottom: 40px;
-        left: 50%;
-        margin-top: 20px;
-        transform: translateX(-50%);
-    }
-
-    .footer-text {
-        font-size: 14px;
-        margin-top: 20px;
-        color: #545454;
-        position: absolute;
-        bottom: 20px;
-        left: 50%;
-        transform: translateX(-50%);
-
-    }
+
+        /* Navbar styles */
+        .navbar {
+            background-color: #fff;
+            padding: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            color: #545454;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            /* Center items vertically */
+            justify-content: space-between;
+            /* Distribute space between items */
+        }
+
+        /* Navigation main container */
+        .nav-main {
+            display: flex;
+            align-items: center;
+            /* Center items vertically */
+            gap: 20px;
+        }
+
+        .nav-content {
+            background-image: url('images/f1.png');
+            background-size: cover;
+            background-position: center center;
+            background-attachment: fixed;
+            background-repeat: no-repeat;
+            padding: 60px 0;
+
+
+        }
+
+        .nav-content-cont {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            margin-left: 70px;
+
+        }
+
+        .nav-main {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+
+            /* Add some spacing between nav-main and nav-content */
+        }
+
+        .nav-btn {
+            background-color: transparent;
+            color: #545454;
+            border: none;
+            font-size: 16px;
+            margin-top: 12px;
+            margin-left: 30px;
+            cursor: pointer;
+            text-align: center;
+            display: inline-block;
+            transition: color 0.3s ease, text-decoration 0.3s ease;
+        }
+
+        /* Hover effect on button */
+        .nav-btn:hover {
+
+            text-decoration: underline;
+        }
+
+        .icon-btn {
+            background-color: #f4f5f6;
+            border: 2px solid #000;
+            border-radius: 50%;
+            cursor: pointer;
+            padding: 3px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-left: 20px;
+            /* Adjust this value as needed */
+            transition: background-color 0.3s ease, border-color 0.3s ease;
+            z-index: 99999;
+            position: relative;
+            /* Enable relative positioning */
+            right: -100px;
+        }
+
+
+        .icon-btn {
+            z-index: 99999;
+            margin-left: auto;
+            width: 40px;
+            /* Set to desired size */
+            height: 40px;
+        }
+
+
+
+
+        .nav-main>.icon-btn:hover {
+            background-color: #f4f4f9;
+            /* Light background on hover */
+            border-color: #000;
+            /* Darker border on hover */
+        }
+
+
+
+        .nav-main>.icon-btn:hover .user-icon {
+            color: #000;
+            /* Darker icon color on hover */
+        }
+
+        .user-icon {
+            font-size: 24px;
+            /* Icon size */
+            color: #545454;
+            transition: color 0.3s ease;
+            /* Smooth color change on hover */
+        }
+
+        .user-icon:hover {
+            color: #545454;
+            /* Darken color on hover */
+        }
+
+        .navbar-links {
+            margin-left: 100px;
+            margin-right: 90px;
+        }
+
+        .navbar-links a {
+            color: #545454;
+            padding: 3px;
+            text-decoration: none;
+            margin: 20px;
+            display: inline-block;
+
+        }
+
+        .navbar-links a:hover {
+            text-decoration: underline;
+        }
+
+        .navbar-logo {
+            height: 90px;
+            width: auto;
+            margin-right: 0px;
+            margin-left: 30px;
+            margin-top: 0;
+        }
+
+        .navbar-text {
+            font-family: "Times New Roman", Times, serif;
+            font-size: 36px;
+            font-weight: bold;
+            white-space: nowrap;
+            color: #000 !important;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+
+        }
+
+        .LAFh1 {
+            font-family: "League Spartan", sans-serif;
+            font-optical-sizing: auto;
+            font-weight: bold;
+        }
+
+        .nav-title h1 {
+            font-size: 78px;
+            color: #f6efe0;
+            font-style: italic;
+            font-weight: bold;
+            line-height: 1.1;
+            width: 700px;
+            font-family: 'Hanken Grotesk', Arial, sans-serif;
+
+
+        }
+
+        .nav-text p {
+            font-size: 16px;
+            color: #fff;
+            line-height: 1.4;
+            margin-bottom: 20px;
+
+        }
+
+        ul {
+            margin-left: 30px;
+            margin-top: 5px;
+            font-size: 14px;
+        }
+
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            z-index: 999;
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            padding: 30px;
+            color: #545454;
+            border-radius: 10px;
+            border: 1px solid #888;
+            width: 400px;
+            max-width: 100%;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            animation: fadeIn 0.3s ease-out;
+            margin-bottom: 0px;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .modal-content-greet {
+            background-color: #fefefe;
+            padding: 30px;
+            color: #545454;
+            border-radius: 10px;
+            border: 1px solid #888;
+            width: 340px;
+            max-width: 100%;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            animation: fadeIn 0.3s ease-out;
+            margin-bottom: 0px;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .modal-overlay.show {
+            display: block;
+            animation: fadeIn 2.5s ease-out;
+        }
+
+        .modal-overlay.hide {
+            animation: fadeOut 2.5s ease-in;
+            animation-fill-mode: forwards;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+
+        @keyframes fadeOut {
+            from {
+                opacity: 1;
+            }
+
+            to {
+                opacity: 0;
+            }
+        }
+
+
+
+        .modal-content2 {
+            background-color: #fefefe;
+            padding: 30px;
+            color: #545454;
+            border-radius: 10px;
+            border: 1px solid #fefefe;
+            width: 200px;
+            max-width: 100%;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            animation: fadeIn 0.3s ease-out;
+            margin-bottom: 0px;
+            position: absolute;
+            top: 23%;
+            right: 0;
+            transform: translate(-50%, -50%);
+            padding-top: 20px;
+
+        }
+
+        /* Adding the arrow */
+        .modal-content2::after {
+            content: "";
+            position: absolute;
+            top: 5px;
+            /* Position the arrow vertically */
+            right: -10px;
+            /* Place the arrow to the right side of the modal */
+            width: 0;
+            height: 0;
+            border-top: 10px solid transparent;
+            /* Transparent top edge */
+            border-bottom: 10px solid transparent;
+            /* Transparent bottom edge */
+            border-left: 10px solid #fff;
+            /* The arrow color matches the modal background */
+            z-index: 1000;
+            /* Ensures it appears above other elements */
+        }
+
+        /* Style for the close button */
+        .close-btn {
+            position: absolute;
+            top: 0px;
+            /* Adjust based on your design */
+            right: 10px;
+            /* Adjust based on your design */
+            background: transparent;
+            border: none;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            color: #333;
+            /* Change color to match your theme */
+        }
+
+        .modal-title2 {
+            display: inline;
+            text-align: center;
+        }
+
+        .modal-title2 h3 {
+            margin-bottom: 2px;
+            font-size: 17px;
+        }
+
+        .modal-title2 p {
+            margin-bottom: 2px;
+            font-size: 14px;
+        }
+
+        .butclass {
+            display: flex;
+            /* Enables flexbox */
+            flex-direction: column;
+            /* Align items vertically */
+            align-items: center;
+            /* Center items horizontally */
+            gap: 10px;
+            /* Adds spacing between the buttons */
+            margin-top: 20px;
+            /* Optional: add some spacing above the buttons */
+        }
+
+        .btn-ok2 {
+            padding: 5px 20px;
+            color: #545454;
+            border: none;
+            border-radius: 0px;
+            cursor: pointer;
+            margin-bottom: 10px;
+            text-align: center;
+            border: 2px solid #545454;
+
+            /* Allow the button to resize based on content */
+            width: 120px;
+            /* Optional: Ensure buttons have consistent size */
+        }
+
+        .btn-ok2:hover {
+            background-color: #ccc;
+        }
+
+
+        .close-btn:hover {
+            color: #f00;
+            /* Optional: Add hover effect */
+        }
+
+
+
+        .modal-title {
+            display: inline;
+            text-align: center;
+        }
+
+        .modal-title h3 {
+            margin-bottom: 10px;
+            font-size: 22px;
+        }
+
+        .modal-title p {
+            margin-bottom: 15px;
+        }
+
+        .modal-cont {
+            font-size: 14px;
+        }
+
+        .modal-ques {
+            margin-bottom: 5px;
+            margin-top: 25px;
+        }
+
+        @keyframes fadeIn {
+            0% {
+                opacity: 0;
+            }
+
+            100% {
+                opacity: 1;
+            }
+        }
+
+        .italic {
+            font-style: italic;
+            color: #545454;
+        }
+
+        .button-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            margin-top: 20px;
+        }
+
+        .btn-ok {
+            padding: 5px 40px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .btn-ok:hover {
+            background-color: #45a049;
+        }
+
+        /* Dropdown Container */
+        .dropdown {
+            position: relative;
+            display: inline-block;
+            margin-bottom: 10px;
+            z-index: 1;
+        }
+
+        /* Dropdown Button */
+        .dropdown-btn {
+            padding: 5px 20px;
+            background-color: #ff7701;
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background-color 0.3s ease;
+        }
+
+        /* Dropdown Arrow */
+        .dropdown-btn::after {
+            content: '';
+            width: 0;
+            height: 0;
+            border-top: 5px solid transparent;
+            border-bottom: 5px solid transparent;
+            border-left: 5px solid #fff;
+
+            margin-left: 10px;
+            transition: transform 0.3s ease;
+            transform: rotate(270deg);
+        }
+
+        /* Dropdown Content */
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            background-color: #ff7701;
+            min-width: 180px;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+            z-index: 1;
+            margin-top: 0;
+            border-radius: 4px;
+            left: 0 !important;
+            right: auto;
+
+        }
+
+
+
+        /* Show Dropdown Content on Hover */
+        .dropdown:hover .dropdown-content {
+            display: block;
+        }
+
+        /* Dropdown Links */
+        .dropdown-content a {
+            padding: 10px 16px;
+            text-decoration: none;
+            display: block;
+            color: #fff;
+            /* Link text color */
+            transition: background-color 0.3s ease;
+        }
+
+        /* Dropdown Links Hover Effect */
+        .dropdown-content a:hover {
+            background-color: #e66a00;
+            /* Darker hover background color */
+        }
+
+        /* Dropdown Content */
+        .dropdown-content1 {
+            display: none;
+            position: absolute;
+            background-color: #fff;
+            min-width: 180px;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+            z-index: 1;
+            margin-top: 0;
+            border-radius: 4px;
+            left: 0 !important;
+            right: auto;
+
+        }
+
+
+
+        /* Show Dropdown Content on Hover */
+        .dropdown:hover .dropdown-content1 {
+            display: block;
+        }
+
+        /* Dropdown Links */
+        .dropdown-content1 a {
+            padding: 5px 5px;
+            text-decoration: none;
+            display: block;
+            color: #333;
+            /* Link text color */
+            transition: background-color 0.3s ease;
+        }
+
+        /* Dropdown Links Hover Effect */
+        .dropdown-content1 a:hover {
+            background-color: #ccc;
+            /* Darker hover background color */
+        }
+
+
+
+        /* Container styling */
+        .container {
+            max-width: 100%;
+            width: 80%;
+            margin: 1px;
+            background-color: #ffffff;
+            padding: 40px 40px;
+            border-radius: 2px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+            box-sizing: border-box;
+            margin-top: 20px;
+
+        }
+
+        .container-wrapper {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin-top: 0;
+            /* Remove unnecessary margin */
+            margin-bottom: 0;
+            /* Remove unnecessary margin */
+            background-color: #fff;
+        }
+
+
+        /* Title container styling */
+        .container-title {
+            display: flex;
+            align-items: flex-end;
+            /* Vertically center the items */
+            justify-content: flex-start;
+            /* Ensure the items are aligned to the left */
+        }
+
+        .container-title h2 {
+            margin: 0;
+            /* Remove default margin */
+            font-size: 24px;
+            color: #333;
+            line-height: 1.2;
+            /* Ensure line height is consistent */
+        }
+
+        .container-title p {
+            margin: 0;
+            /* Remove default margin */
+            font-size: 13px;
+            color: #777;
+            margin-left: 10px;
+            /* Move the <p> element a little closer to the <h2> */
+            line-height: 1.6;
+            /* Set line height to match h2 */
+            display: inline-block;
+            /* Ensure <p> aligns inline with <h2> */
+            vertical-align: middle;
+            /* Align vertically to the middle of <h2> */
+        }
+
+
+        hr {
+            margin-bottom: 20px;
+            margin-top: 10px;
+        }
+
+        /* Alert styles */
+        .alert {
+            padding: 10px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+            text-align: center;
+            font-size: 14px;
+        }
+
+        .alert-success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+
+        .alert-danger {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+
+        /* Form input styles */
+        .form-group {
+
+            margin-bottom: 15px;
+            flex: 1;
+        }
+
+        .form-group1 {
+
+            margin-bottom: 15px;
+            flex: 1;
+            display: flex;
+            justify-content: space-evenly;
+            width: 250px;
+        }
+
+
+
+        .back-btn {
+            margin-left: auto;
+            /* pushes back button to the left */
+
+
+            margin-bottom: 30px;
+
+
+
+        }
+
+        .form-group p {
+            font-size: 13px;
+            color: #777;
+            margin-top: 5px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: normal;
+            color: #333;
+        }
+
+        input[type="text"],
+        input[type="number"],
+        input[type="date"],
+        input[type="time"],
+        textarea,
+        select {
+            width: 100%;
+            padding: 6px;
+            box-sizing: border-box;
+            border: 1px solid #ccc;
+            border-radius: 0px;
+            font-size: 14px;
+        }
+
+
+        textarea {
+            resize: vertical;
+        }
+
+        /* Flexbox layout for form rows */
+        .form-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 4%;
+        }
+
+        .form-row .form-group {
+            width: 48%;
+            /* Set width to 48% for each field */
+        }
+
+        /* Flexbox for description, image, and submit button */
+        .form-row-submit {
+            display: flex;
+            justify-content: space-between;
+            gap: 4%;
+            align-items: flex-end;
+            /* Align items to the top */
+        }
+
+        .form-row-submit .form-group {
+            width: 48%;
+            /* Description and Image each takes 48% */
+        }
+
+        /* Submit button styling */
+        .btn {
+            display: block;
+            align-items: center;
+            background-color: #545454;
+            color: #fff;
+            border: 2px solid #545454;
+            margin-left: auto;
+            margin-right: 0;
+            border-radius: 4px;
+            text-align: center;
+            cursor: pointer;
+            width: 180px;
+            height: 35px;
+            font-size: 14px;
+            transition: background-color 0.3s ease;
+        }
+
+        .btn:hover {
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        /* Footer */
+        .footer {
+            background-color: #fff;
+            padding: 20px 0;
+            color: #545454;
+            font-family: 'Hanken Grotesk', sans-serif;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            position: relative;
+            text-align: center;
+        }
+
+        .footer-content {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            /* Space out logo and contact text */
+            width: 90%;
+            margin: 0 auto;
+            padding-bottom: 20px;
+        }
+
+        .footer-logo {
+            align-self: flex-start;
+            margin-top: 25px;
+        }
+
+        .footer-logo img {
+            max-width: 70px;
+        }
+
+
+        .footer-contact {
+            text-align: right;
+            /* Align text to the right */
+            font-size: 14px;
+            margin-left: auto;
+            width: 20%;
+            margin-bottom: 25px;
+        }
+
+        .footer-contact h4 {
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+
+        .footer-contact p {
+            font-size: 14px;
+            margin-top: 0;
+
+        }
+
+        .all-links {
+            display: flex;
+
+            width: 100%;
+            margin-top: 20px;
+            position: absolute;
+
+            justify-content: center;
+        }
+
+        .footer-others {
+            display: flex;
+            justify-content: center;
+            /* Align links in the center */
+            gap: 30px;
+            top: 190px;
+            left: 30%;
+            margin-left: 140px;
+            margin-top: 20px;
+            transform: translateX(-50%);
+        }
+
+
+        .footer-others a {
+            color: #545454;
+            text-decoration: none;
+            font-size: 14px;
+        }
+
+        .footer-separator {
+            width: 90%;
+            height: 1px;
+            background-color: #545454;
+            margin: 10px auto;
+            border: none;
+            position: absolute;
+            bottom: 40px;
+            left: 50%;
+            margin-top: 20px;
+            transform: translateX(-50%);
+        }
+
+        .footer-text {
+            font-size: 14px;
+            margin-top: 20px;
+            color: #545454;
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+
+        }
     </style>
 </head>
 
@@ -1162,6 +1126,75 @@ $conn->close();
         </div>
     </div>
 
+    <div class="nav-content">
+        <div class="nav-content-cont">
+            <div class="nav-title">
+                <h1 class="LAFh1">LOST AND FOUND HELP DESKS</h1>
+            </div>
+            <div class="nav-text">
+                <p>We are located at the main entrance right beside the Guard house</p>
+            </div>
+
+            <!-- Dropdown button for "Report Found" or "Report Lost" -->
+            <div class="dropdown">
+                <button class="dropdown-btn" aria-haspopup="true" aria-expanded="false">
+                    <?php echo htmlspecialchars($buttonLabel); ?>
+                </button>
+                <div class="dropdown-content" role="menu">
+                    <a href="found_report.php" role="menuitem">I found an Item</a>
+                    <a href="lost_report.php" role="menuitem">I lost an Item</a>
+
+                </div>
+            </div>
+
+        </div>
+    </div>
+    <!-- Success Modal -->
+    <!-- Success Modal -->
+    <div id="successModal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-title">
+                <h3>Report Submitted!</h3>
+                <p>We appreciate your help in reuniting this item with its owner.</p>
+            </div>
+            <strong>
+                <p>Next Steps: <a href="Guidelines.php" class="italic">(See Guidelines)</a></p>
+            </strong>
+            <ul>
+                <li><strong>Our team will catalog the item</strong> and add it to our Lost & Found inventory.</li>
+                <li><strong>Item Storage: </strong>The found item will be securely stored until it is claimed or further
+                    arrangements are made.</li>
+            </ul>
+            <p class="modal-ques"><strong>Questions or Updates?</strong></p>
+            <p class="modal-cont">If you have any questions or need to provide more details about the item, please reach
+                out to us
+                at 89-9999 or visit our Lost & Found Help Desk</p>
+
+            <div class="button-container">
+                <button class="btn-ok" onclick="closeModal('successModal')">OKAY</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Greeting Modal -->
+    <div id="greetingModal" class="modal-overlay" style="display: none;">
+        <div class="modal-content-greet">
+            <div class="modal-title">
+                <h3>Great to meet you, <strong><?php echo htmlspecialchars($userName); ?></strong>!</h3>
+                <hr>
+                <p>Report lost or found items, and we’ll help reconnect you with
+                    your belongings.</p>
+                <p>We’re excited to have you with us!</p>
+            </div>
+
+            <div class="button-container">
+                <button class="btn-ok" onclick="closeModal('greetingModal')">LET'S GO</button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Login Click Modal -->
     <div id="loginclickmodal" class="modal-overlay" style="display: none;">
         <div class="modal-content2">
             <!-- Close Button -->
@@ -1182,93 +1215,54 @@ $conn->close();
         </div>
     </div>
 
-
-    </div>
-    <div class="nav-content">
-        <div class="nav-content-cont">
-            <div class="nav-title">
-                <h1 class="LAFh1">LOST AND FOUND HELP DESKS</h1>
-            </div>
-            <div class="nav-text">
-                <p>We are located at the main entrance right beside the ticket booth</p>
-            </div>
-
-            <!-- Dropdown button for "Report Found" or "Report Lost" -->
-            <div class="dropdown">
-                <button class="dropdown-btn" aria-haspopup="true" aria-expanded="false">
-                    <?php echo htmlspecialchars($buttonLabel); ?>
-                </button>
-                <div class="dropdown-content" role="menu">
-                    <a href="found_report.php" role="menuitem">Report Found</a>
-                    <a href="lost_report.php" role="menuitem">Report Lost</a>
-                </div>
-            </div>
-
-        </div>
-    </div>
-    <!-- Success Modal -->
-    <div id="successModal" class="modal-overlay">
-        <div class="modal-content">
-            <div class="modal-title">
-                <h3>Lost Item Report Submitted!</h3>
-                <p>Thank you for letting us know about your lost item.</p>
-            </div>
-            <strong>
-                <p>Next Steps: <a href="Guidelines.php" class="italic">(See Guidelines)</a></p>
-            </strong>
-            <ul>
-                <li><strong>Our team will review your report.</strong> We’ll match your description with items currently
-                    in the Lost & Found.</li>
-                <li><strong>If a matching item is found, </strong>we’ll contact you using the information you provided.
-                </li>
-                <li><strong>Check your email and phone</strong> for any updates regarding your item status.</li>
-            </ul>
-            <p class="modal-ques"><strong>Want to check in person? </strong></p>
-            <p class="modal-cont"> If you'd like, you may visit the Lost & Found office to see if your item has been
-                turned in.</p>
-
-            <div class="button-container">
-                <button class="btn-ok"
-                    onclick="document.getElementById('successModal').style.display='none'">OKAY</button>
-            </div>
-        </div>
-    </div>
     <div class="container-wrapper">
         <div class="container">
             <div class="container-title">
-                <h2>Submitting a LOST item</h2>
-                <p>Please double-check all the information provided</p>
+                <h2>Did you LOSE an item?</h2>
+                <p>Please provide details to help reunite the item with its owner.</p>
             </div>
             <hr>
             <?php if ($message): ?>
-            <div class="alert <?= strpos($message, 'alert-danger') !== false ? 'alert-danger' : 'alert-success' ?>">
-                <?= $message; ?>
-            </div>
+                <div class="alert <?= strpos($message, 'alert-danger') !== false ? 'alert-danger' : 'alert-success' ?>">
+                    <?= $message; ?>
+                </div>
             <?php endif; ?>
 
             <form method="POST" action="" enctype="multipart/form-data">
-                <!-- Object Title | Date Found -->
-                <div class="form-row">
+                <!-- Step Navigation 
+                <div class="step-navigation">
+                    <button type="button" class="btn" onclick="showStep(1)">Step 1</button>
+                    <button type="button" class="btn" onclick="showStep(2)" disabled>Step 2</button>
+                    <button type="button" class="btn" onclick="showStep(3)" disabled>Step 3</button>
+                </div>
+-->
+                <!-- Step 1: Item Information -->
+                <div class="step" id="step1">
+                    <h3>Step 1: Item Information</h3>
                     <div class="form-group">
                         <label for="item_name">Object Title</label>
-                        <input type="text" name="item_name" id="item_name" required aria-required="true"
-                            class="form-control">
+                        <input type="text" name="item_name" id="item_name" required class="form-control">
                         <p>eg. lost camera, gold ring, toyota car key</p>
                     </div>
-
                     <div class="form-group">
-                        <label for="date_found">Date Loss</label>
-                        <input type="date" name="date_found" id="date_found" required aria-required="true"
-                            class="form-control">
+                        <label for="date_found">Date Found</label>
+                        <input type="date" name="date_found" id="date_found" required class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label for="time_found">Time Found</label>
+                        <input type="time" name="time_found" id="time_found" required class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <button type="button" class="btn" onclick="showStep(2)">Next</button>
                     </div>
                 </div>
 
-                <!-- Category | Time Found -->
-                <div class="form-row">
+                <!-- Step 2: Item Details (Hidden by Default) -->
+                <div class="step" id="step2" style="display: none;">
+                    <h3>Step 2: Item Details</h3>
                     <div class="form-group">
                         <label for="category">Category</label>
-                        <select name="category" id="category" required aria-required="true" class="form-control"
-                            onchange="showOtherField()">
+                        <select name="category" id="category" required class="form-control">
                             <option value="Electronics & Gadgets">Electronics & Gadgets</option>
                             <option value="Jewelry & Accessories">Jewelry & Accessories</option>
                             <option value="Identification & Documents">Identification & Documents</option>
@@ -1278,142 +1272,61 @@ $conn->close();
                             <option value="Other">Other</option>
                         </select>
                     </div>
-
-                    <!-- Other category field, hidden by default -->
-                    <div class="form-group" id="otherCategoryField" style="display:none;">
-                        <label for="other_category">Please specify</label>
-                        <input type="text" name="other_category" id="other_category" class="form-control"
-                            placeholder="Enter custom category">
-                    </div>
-
-
-
-
-                </div>
-
-                <!-- Brand | Location Found -->
-                <div class="form-row">
                     <div class="form-group">
                         <label for="brand">Brand</label>
                         <input type="text" name="brand" id="brand" class="form-control">
-                        <p> (Ralph Lauren, Samsung, KithenAid, etc.)</p>
+                        <p>(Ralph Lauren, Samsung, KitchenAid, etc.)</p>
                     </div>
-
                     <div class="form-group">
-                        <label for="location_found">Last Known Location</label>
-                        <select name="location_found" id="location_found" required aria-required="true"
-                            class="form-control">
-                            <!-- Uncertainty Option -->
-                            <option value="I am not sure">I'm not sure</option>
-                            <!-- Main Areas -->
+                        <label for="location_found">Location Found</label>
+                        <select name="location_found" id="location_found" required class="form-control">
                             <option value="Main Entrance">Main Entrance</option>
                             <option value="Courtyard">Courtyard</option>
                             <option value="Canteen">Canteen</option>
                             <option value="Social Hall">Social Hall</option>
-                            <!-- Floor Hallways -->
                             <option value="First Floor Hallway">First Floor Hallway</option>
                             <option value="Second Floor Hallway">Second Floor Hallway</option>
                             <option value="Third Floor Hallway">Third Floor Hallway</option>
                             <option value="Fourth Floor Hallway">Fourth Floor Hallway</option>
-                            <!-- Additional Landmark -->
                             <option value="Parking Area">Parking Area</option>
                         </select>
                     </div>
-
-                </div>
-
-                <!-- Primary Color | Image -->
-                <div class="form-row">
                     <div class="form-group">
                         <label for="primary_color">Primary Color</label>
                         <input type="text" name="primary_color" id="primary_color" class="form-control">
-                        <p>Please add the color that best represents the lost property(Black, Red, Blue, etc.)</p>
+                        <p>Please add the color that best represents the found item (Black, Red, Blue, etc.)</p>
                     </div>
-
-
+                    <div class="form-group">
+                        <label for="picture">Image</label>
+                        <input type="file" name="picture" id="picture" class="form-control" accept="image/*">
+                    </div>
+                    <div class="form-group1">
+                        <button type="button" class="btn back-btn" onclick="showStep(1)">Back</button>
+                        <button type="button" class="btn" onclick="showStep(3)">Next</button>
+                    </div>
                 </div>
 
-                <div class="form-row">
+                <!-- Step 3: Description (Hidden by Default) -->
+                <div class="step" id="step3" style="display: none;">
+                    <h3>Step 3: Description</h3>
                     <div class="form-group">
                         <label for="description">Description</label>
                         <textarea name="description" id="description" rows="4" class="form-control"></textarea>
-
-                        <div class="form-group">
-                            <label for="tip">Tip (Optional)</label>
-                            <input type="text" name="tip" id="tip" class="form-control" step="0.01" placeholder="">
-                            <p>Please especify currency(eg. 1000 PHP)</p>
-
-                            <div class="form-group">
-                                <label for="picture">Image</label>
-                                <input type="file" name="picture" id="picture" class="form-control" accept="image/*"
-                                    onchange="previewImage(event)">
-                                <div id="image-preview" style="margin-top: 10px;">
-                                    <!-- Preview will appear here -->
-                                </div>
-                            </div>
-                        </div>
-
+                    </div>
+                    <div class="form-group1">
+                        <button type="button" class="btn back-btn" onclick="showStep(2)">Back</button>
+                        <button type="submit" class="btn">Submit</button>
                     </div>
 
                 </div>
-                <!-- Contact Information -->
-                <div class="container-title2">
-                    <h2>Contact Information</h2>
-                    <hr>
-                </div>
-                <div class="form-group">
-
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="first_name">First Name</label>
-                            <input type="text" name="first_name" id="first_name" required aria-required="true">
-                            <div class="form-control">
-                                <p>Please enter your first name (This will appear on your submission)</p>
-                            </div>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="last_name">Last Name</label>
-                            <input type="text" name="last_name" id="last_name" required aria-required="true">
-                            <div class="form-control">
-                                <p>Please enter your Last name (This will appear on your submission)</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="phone_number">Phone Number</label>
-                            <input type="text" name="phone_number" id="phone_number" required aria-required="true">
-                            <div class="form-control">
-                                <p>Please enter your Phone number (This will appear on your submission)</p>
-                            </div>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="last_name">Email</label>
-                            <input type="text" name="email" id="email" required aria-required="true">
-                            <div class="form-control">
-                                <p>Please enter your Email (This will appear on your submission)</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group align-container">
-                            <label class="terms">
-                                <input type="checkbox" name="terms" required>
-                                I agree to the <a href="guidelines.php" class="terms-link">terms and conditions</a>
-                            </label>
-
-                            <input type="submit" class="btn" value="Submit">
-                        </div>
-                    </div>
-
-
-                </div>
-
             </form>
         </div>
     </div>
+
+
+
+
+
     <footer class="footer">
         <div class="footer-content">
             <div class="footer-logo">
@@ -1441,105 +1354,84 @@ $conn->close();
         </div>
     </footer>
     <script>
-    // Function to close the modal by ID
-    function closeModal(modalId) {
-        document.getElementById(modalId).style.display = 'none';
-    }
+        function showStep(step) {
+            document.querySelectorAll('.step').forEach(s => s.style.display = 'none');
+            document.getElementById('step' + step).style.display = 'block';
+            document.querySelector('form').addEventListener('submit', function() {
+                document.querySelectorAll('.step').forEach(s => s.style.display = 'block');
+            });
 
-    // Function to open the modal by ID
-    function openModal(modalId) {
-        document.getElementById(modalId).style.display = 'block';
-    }
-
-    // Show success modal if report submission is successful
-    <?php if (isset($_GET['success']) && $_GET['success'] == 'true') { ?>
-    document.addEventListener('DOMContentLoaded', function() {
-        openModal('successModal');
-
-        // Remove 'success' query parameter from URL to prevent modal from showing again on refresh
-        const url = new URL(window.location.href);
-        url.searchParams.delete('success');
-        window.history.replaceState({}, document.title, url.toString());
-    });
-    <?php } ?>
-
-    // Show greeting modal only if logged in and no report was submitted
-    <?php if (isset($_SESSION['user_id']) && !isset($_GET['success']) && !isset($_SESSION['greeting_shown'])) { ?>
-    document.addEventListener('DOMContentLoaded', function() {
-        openModal('greetingModal');
-    });
-    <?php } ?>
-
-    // Function to close the modal by ID
-    function closeModal(modalId) {
-        document.getElementById(modalId).style.display = 'none';
-    }
-
-    // Function to open the modal by ID
-    function openModal(modalId) {
-        document.getElementById(modalId).style.display = 'block';
-    }
-
-    function closeModal(modalId) {
-        document.getElementById(modalId).style.display = 'none';
-    }
-
-    // Show the "Other" category input field when "Other" is selected
-    // Show the "Other" category input field when "Other" is selected
-    function showOtherField() {
-        var category = document.getElementById("category").value;
-        var otherCategoryField = document.getElementById("otherCategoryField");
-
-        // Display input field if "Other" is selected
-        if (category === "Other") {
-            otherCategoryField.style.display = "block"; // Show the input field
-        } else {
-            otherCategoryField.style.display = "none"; // Hide the input field
         }
-    }
-
-    // Trigger the function initially to handle any pre-selected value
-    window.onload = function() {
-        showOtherField();
-    }
     </script>
+
+
     <script>
-    function previewImage(event) {
-        const fileInput = event.target;
-        const previewContainer = document.getElementById('image-preview');
-
-        // Clear previous preview
-        previewContainer.innerHTML = '';
-
-        if (fileInput.files && fileInput.files[0]) {
-            const file = fileInput.files[0];
-            const reader = new FileReader();
-
-            reader.onload = function(e) {
-                // Create an image element
-                const img = document.createElement('img');
-                img.src = e.target.result;
-                img.alt = 'Uploaded Image';
-                img.style.maxWidth = '100%';
-                img.style.maxHeight = '200px'; // Adjust size as needed
-                img.style.border = '1px solid #ccc';
-                img.style.padding = '5px';
-                img.style.borderRadius = '4px';
-
-                // Append to the preview container
-                previewContainer.appendChild(img);
-            };
-
-            reader.readAsDataURL(file);
+        // Function to close the modal by ID
+        function closeModal(modalId) {
+            document.getElementById(modalId).style.display = 'none';
         }
-    }
+
+        // Function to open the modal by ID
+        function openModal(modalId) {
+            document.getElementById(modalId).style.display = 'block';
+        }
+
+        // Show success modal if report submission is successful
+        <?php if (isset($_GET['success']) && $_GET['success'] == 'true') { ?>
+            document.addEventListener('DOMContentLoaded', function() {
+                openModal('successModal');
+
+                // Remove 'success' query parameter from URL to prevent modal from showing again on refresh
+                const url = new URL(window.location.href);
+                url.searchParams.delete('success');
+                window.history.replaceState({}, document.title, url.toString());
+            });
+        <?php } ?>
+
+        // Show greeting modal only if logged in and no report was submitted
+        <?php if (isset($_SESSION['user_id']) && !isset($_GET['success']) && !isset($_SESSION['greeting_shown'])) { ?>
+            document.addEventListener('DOMContentLoaded', function() {
+                openModal('greetingModal');
+            });
+        <?php } ?>
+
+        // Function to close the modal by ID
+        function closeModal(modalId) {
+            document.getElementById(modalId).style.display = 'none';
+        }
+
+        // Function to open the modal by ID
+        function openModal(modalId) {
+            document.getElementById(modalId).style.display = 'block';
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).style.display = 'none';
+        }
+        // Show the "Other" category input field when "Other" is selected
+        function showOtherField() {
+            var category = document.getElementById("category").value;
+            var otherCategoryField = document.getElementById("otherCategoryField");
+
+            // Display input field if "Other" is selected
+            if (category === "Other") {
+                otherCategoryField.style.display = "block"; // Show the input field
+            } else {
+                otherCategoryField.style.display = "none"; // Hide the input field
+            }
+        }
+
+        // Trigger the function initially to handle any pre-selected value
+        window.onload = function() {
+            showOtherField();
+            s
+        }
     </script>
 
 
 
     <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
     <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
-
 </body>
 
 </html>

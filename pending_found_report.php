@@ -47,6 +47,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['approve_id'])) {
         // Insert into approved_reports
         // Assign 'Unclaimed' to a variable
         $status = 'Unclaimed';
+        $position = 'on staff';
         // Prepare the query
         $stmtInsert = $conn->prepare("
         INSERT INTO approved_found_reports 
@@ -357,6 +358,9 @@ $claim_count = count($pendingClaimReports);
 $found_count = count($pendingFoundReports);
 $lost_count = count($pendingLostReports);
 
+// Example: Replace with your actual queries
+
+
 // Total pending notifications
 $total_notifications = $claim_count + $found_count + $lost_count;
 
@@ -373,7 +377,7 @@ $total_notifications = $claim_count + $found_count + $lost_count;
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pending Found Reports</title>
+    <title>Lost Reports</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
@@ -1517,7 +1521,7 @@ $total_notifications = $claim_count + $found_count + $lost_count;
             <span class="navbar-text">UNIVERSITY OF CALOOCAN CITY</span>
             <!-- Claim Reports Dropdown -->
             <div class="dropdown">
-                <button class="dropbtn">Claim Reports</button>
+                <button class="dropbtn">Claim Requests</button>
                 <div class="dropdown-content">
                     <a href="pending_claim.php">Pending Claims</a>
                     <a href="approved_claim_report.php">Approved Claims</a>
@@ -1592,7 +1596,9 @@ $total_notifications = $claim_count + $found_count + $lost_count;
 
         </div>
         <div class="search-container">
-            <h2>Pending Found Reports</h2>
+            <h2>
+                <h2>Browse Found Items</h2>
+            </h2>
             <hr class="hr-center">
 
             <form class="search-form">
@@ -1651,7 +1657,7 @@ $total_notifications = $claim_count + $found_count + $lost_count;
                             <td>
                                 <form action="" method="POST" style="display:inline;">
                                     <input type="hidden" name="approve_id" value="<?= htmlspecialchars($row["id"]) ?>">
-                                    <button type="submit" class="btn btn-success">Approve</button>
+                                    <button type="submit" class="btn btn-success">Recieve</button>
                                 </form>
                                 <form action="" method="POST" style="display:inline;">
                                     <input type="hidden" name="delete_id" value="<?= htmlspecialchars($row["id"]) ?>">
@@ -1662,7 +1668,7 @@ $total_notifications = $claim_count + $found_count + $lost_count;
                         <?php endforeach; ?>
                         <?php else: ?>
                         <tr>
-                            <td colspan="7">No pending reports found</td>
+                            <td colspan="7">No Lost reports found</td>
                         </tr>
                         <?php endif; ?>
                     </tbody>

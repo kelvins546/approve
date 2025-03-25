@@ -1,4 +1,5 @@
 <?php
+session_start();
 // Enable error reporting
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
@@ -16,15 +17,6 @@ if ($conn->connect_error) {
 }
 $successMessage = '';
 
-session_start(); // Start the session to access the message
-
-// Display the message if it's set
-if (isset($_SESSION['message'])) {
-    $successMessage = $_SESSION['message'];
-    unset($_SESSION['message']); // Clear the session message after displaying it
-} else {
-    $successMessage = ''; // Set empty if no message exists
-}
 // Check if there is a message in the URL
 if (isset($_GET['message'])) {
     $successMessage = urldecode($_GET['message']);
@@ -49,12 +41,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['approve_id'])) {
         $status = 'Unclaimed';
         // Prepare the query
         $stmtInsert = $conn->prepare("
-        INSERT INTO approved_found_reports 
-        (item_name, date_found, category, time_found, brand, location_found, 
-        primary_color, picture, description, status) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ");
-
+    INSERT INTO approved_claim_reports 
+    (item_name, date_found, category, time_found, brand, location_found, 
+     primary_color, picture, description, status) 
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+");
         if (!$stmtInsert) {
             die("Error preparing the query: " . $conn->error);
         }
@@ -73,10 +64,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['approve_id'])) {
             $reportData['description'],
             $status
         );
-
-
         if ($stmtInsert->execute()) {
-            $stmtDelete = $conn->prepare("DELETE FROM approved_found_reports WHERE id = ?");
+            $stmtDelete = $conn->prepare("DELETE FROM approved_claim_reports WHERE id = ?");
             $stmtDelete->bind_param("i", $approveId);
             if ($stmtDelete->execute()) {
                 if (!empty($reportData['picture']) && file_exists($pendingPath)) {
@@ -131,15 +120,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['delete_id'])) {
 
 // Handle approve all request
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['approve_all'])) {
-    $resultSelect = $conn->query("SELECT * FROM approved_found_reports WHERE status = 'Unclaimed'");
+    $resultSelect = $conn->query("SELECT * FROM approved_claim_reports WHERE status = 'Unclaimed'");
 
     if ($resultSelect->num_rows > 0) {
         while ($reportData = $resultSelect->fetch_assoc()) {
             $stmtInsert = $conn->prepare("
-                INSERT INTO approved_found_reports 
+                INSERT INTO approved_claim_reports 
                 (item_name, date_found, category, time_found, brand, location_found, 
-                 primary_color, picture, description, 
-            , status) 
+                 primary_color, picture, description, first_name, last_name, phone_number, 
+                 email, status) 
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ");
             $stmtInsert->bind_param(
@@ -153,12 +142,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['approve_all'])) {
                 $reportData['primary_color'],
                 $reportData['picture'],
                 $reportData['description'],
-
-
+                $reportData['first_name'],
+                $reportData['last_name'],
+                $reportData['phone_number'],
+                $reportData['email'],
+                $reportData['status']
             );
 
             if ($stmtInsert->execute()) {
-                $stmtDelete = $conn->prepare("DELETE FROM approved_found_reports WHERE id = ?");
+                $stmtDelete = $conn->prepare("DELETE FROM approved_claim_reports WHERE id = ?");
                 $stmtDelete->bind_param("i", $reportData['id']);
                 $stmtDelete->execute();
                 $stmtDelete->close();
@@ -177,7 +169,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['approve_all'])) {
 
 // Handle delete all request
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['delete_all'])) {
-    $resultSelect = $conn->query("SELECT picture FROM approved_found_reports WHERE status = 'Unclaimed'");
+    $resultSelect = $conn->query("SELECT picture FROM approved_claim_reports WHERE status = 'Unclaimed'");
 
     if ($resultSelect->num_rows > 0) {
         while ($reportData = $resultSelect->fetch_assoc()) {
@@ -185,7 +177,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['delete_all'])) {
                 unlink("uploads/pending/" . $reportData['picture']);
             }
         }
-        $conn->query("DELETE FROM approved_found_reports WHERE status = 'Unclaimed'");
+        $conn->query("DELETE FROM approved_claim_reports WHERE status = 'Unclaimed'");
         $successMessage = "All reports deleted successfully.";
     } else {
         $successMessage = "No reports to delete.";
@@ -243,7 +235,6 @@ if ($limit == 10000) {
 $currentEntriesStart = $offset + 1;  // First entry on this page
 $currentEntriesEnd = min($offset + $limit, $totalRecords);  // Last entry on this page
 
-
 $userName = htmlspecialchars($_SESSION['name'] ?? 'User');
 
 //start deleting here to remove the count on see details
@@ -289,9 +280,6 @@ function countUserReports($conn, $userId)
 
     return 0; // Default to 0 if query fails
 }
-
-
-
 // Check if logout is requested
 if (isset($_GET['logout'])) {
     // Destroy session
@@ -302,6 +290,8 @@ if (isset($_GET['logout'])) {
     header("Location: login_admin.php");
     exit;
 }
+
+$pending_claim_reports = [];
 $pending_claim_reports = [];
 
 if ($result && $result->num_rows > 0) {
@@ -314,10 +304,30 @@ $pending_claim_reports = fetchReports("pending_claim_reports", $conn);
 $pending_found_reports = fetchReports("pending_found_reports", $conn);
 $pending_lost_reports = fetchReports("pending_lost_reports", $conn);
 
+// Function to fetch reports with pending position
+
+// Function to fetch reports with reporter name
+
+// Function to fetch reports with reporter name
 function fetchReports($table, $conn)
 {
-    $query = "SELECT * FROM $table WHERE position = 'Pending'";
+    // Debugging: Log the query being executed
+    $query = "SELECT $table.*, user.name AS reporter_name 
+              FROM $table 
+              JOIN user 
+              ON $table.user_id = user.card_number 
+              WHERE $table.position = 'Pending'";
+
+    // Debug: Display query (for testing purposes only, remove in production)
+    // echo $query;
+
     $result = $conn->query($query);
+
+    // Check for query errors
+    if (!$result) {
+        die("Query failed: " . $conn->error);
+    }
+
     $reports = [];
     if ($result && $result->num_rows > 0) {
         while ($row = $result->fetch_assoc()) {
@@ -327,13 +337,20 @@ function fetchReports($table, $conn)
     return $reports;
 }
 
-// Example: Replace with your actual queries
-$claim_count = $conn->query("SELECT COUNT(*) as count FROM pending_claim_reports")->fetch_assoc()['count'];
-$found_count = $conn->query("SELECT COUNT(*) as count FROM pending_found_reports")->fetch_assoc()['count'];
-$lost_count = $conn->query("SELECT COUNT(*) as count FROM pending_lost_reports")->fetch_assoc()['count'];
+// Fetch pending reports for each table
+$pendingClaimReports = fetchReports("pending_claim_reports", $conn);
+$pendingFoundReports = fetchReports("pending_found_reports", $conn);
+$pendingLostReports = fetchReports("pending_lost_reports", $conn);
 
-// Total pending reports
+// Count the number of pending reports for each table
+$claim_count = count($pendingClaimReports);
+$found_count = count($pendingFoundReports);
+$lost_count = count($pendingLostReports);
+
+// Total pending notifications
 $total_notifications = $claim_count + $found_count + $lost_count;
+
+
 
 
 ?>
@@ -348,7 +365,7 @@ $total_notifications = $claim_count + $found_count + $lost_count;
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>History</title>
+    <title>Claim History</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
@@ -472,6 +489,16 @@ $total_notifications = $claim_count + $found_count + $lost_count;
         text-decoration: underline;
     }
 
+    .navbar-text {
+        font-family: "Times New Roman", Times, serif;
+        font-size: 30px;
+        font-weight: bold;
+        white-space: nowrap;
+        color: #fff !important;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+
+    }
+
     .notif-btn {
         position: relative;
         background: none;
@@ -484,7 +511,6 @@ $total_notifications = $claim_count + $found_count + $lost_count;
         margin-right: -70px;
         margin-top: 10px;
     }
-
 
 
     .notif-badge {
@@ -583,16 +609,6 @@ $total_notifications = $claim_count + $found_count + $lost_count;
         padding-top: 60px;
         box-shadow: -2px 0 6px rgba(0, 0, 0, 0.2);
         z-index: 2;
-    }
-
-    .navbar-text {
-        font-family: "Times New Roman", Times, serif;
-        font-size: 30px;
-        font-weight: bold;
-        white-space: nowrap;
-        color: #fff !important;
-        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
-
     }
 
     .side-nav a {
@@ -1315,7 +1331,6 @@ $total_notifications = $claim_count + $found_count + $lost_count;
         max-width: 70px;
     }
 
-
     .footer-contact {
         text-align: right;
         font-size: 14px;
@@ -1469,9 +1484,7 @@ $total_notifications = $claim_count + $found_count + $lost_count;
 
         <div class="navbar">
             <img src="images/logo.png" alt="Logo" class="navbar-logo">
-            <span class="navbar-text">UNIVERSITY OF CALOOCAN CITY</span>
-
-
+            <span class="navbar-text">UNIVERSITY OF CALOOCAN CITY</span>s
             <!-- Claim Reports Dropdown -->
             <div class="dropdown">
                 <button class="dropbtn">Claim Reports</button>
@@ -1526,109 +1539,11 @@ $total_notifications = $claim_count + $found_count + $lost_count;
             <a href="user_profile.php">User Profile</a>
             <a href="?logout">Logout</a>
         </div>
-        <div id="notif" class="modal-overlay" style="display: none;">
-            <div class="modal-content3">
-                <!-- Close Button -->
-                <button class="close-btn" onclick="closeModal('notif')">&times;</button>
-
-                <div class="modal-title3">
-                    <h2>Notification</h2>
-                    <hr>
-                </div>
-
-                <!-- Pending Claim Reports Section -->
-                <div class="reports-container">
-
-                    <div class="reports-btn">
-                        <a href="pending_claim.php" class="">
-                            <button class="transparent-btn">
-                                <div class="claim-reports-container">
-                                    <?php if (!empty($pending_claim_reports)): ?>
-                                    <?php foreach ($pending_claim_reports as $row): ?>
-                                    <div class="claim-card">
-                                        <div class="claim-card-header">
-
-                                        </div>
-                                        <div class="claim-card-body">
-                                            <p>User <?= htmlspecialchars($row['user_id']) ?> submitted a request
-                                                claim.</p>
-                                        </div>
-
-                                    </div>
-                                    <?php endforeach; ?>
-                                    <?php else: ?>
-
-                                    <?php endif; ?>
-                                </div>
-                            </button>
-
-                            <!-- Pending Found Reports -->
-                            <div class="reports-btn">
-                                <a href="pending_found_report.php" class="">
-                                    <button class="transparent-btn">
-                                        <div class="found-reports-container">
-                                            <?php if (!empty($pending_found_reports)): ?>
-                                            <?php foreach ($pending_found_reports as $row): ?>
-                                            <div class="found-card">
-                                                <div class="found-card-header">
-
-                                                </div>
-                                                <div class="found-card-body">
-                                                    <p>User <?= htmlspecialchars($row['user_id']) ?> submitted a found
-                                                        report
-                                                    </p>
-                                                </div>
-                                                <div class="found-card-actions">
-
-                                                </div>
-                                            </div>
-                                            <?php endforeach; ?>
-                                            <?php else: ?>
-
-                                            <?php endif; ?>
-                                        </div>
-                                    </button>
-                                </a>
-                            </div>
-                            <!-- Pending Lost Reports -->
-                            <div class="reports-btn">
-                                <a href="pending_lost_report.php?_id=<?= htmlspecialchars($row["id"]) ?>" class="">
-                                    <button class="transparent-btn">
-
-                                        <div class="lost-reports-container">
-                                            <?php if (!empty($pending_lost_reports)): ?>
-                                            <?php foreach ($pending_lost_reports as $row): ?>
-                                            <div class="lost-card">
-                                                <div class="lost-card-header">
-
-                                                </div>
-                                                <div class="lost-card-body">
-                                                    <p>User <?= htmlspecialchars($row['user_id']) ?> submitted a lost
-                                                        report.
-                                                    </p>
-                                                </div>
-                                                <div class="lost-card-actions">
-
-                                                </div>
-                                            </div>
-                                            <?php endforeach; ?>
-                                            <?php else: ?>
-
-                                            <?php endif; ?>
-                                        </div>
-                                    </button>
-                                </a>
-                            </div>
-                    </div>
-                </div>
-
-            </div>
-        </div>
 
 
         </div>
         <div class="search-container">
-            <h2>History</h2>
+            <h2>Claim History</h2>
             <hr class="hr-center">
 
             <form class="search-form">
@@ -1640,7 +1555,7 @@ $total_notifications = $claim_count + $found_count + $lost_count;
 
             </form>
         </div>
-        <form method="POST" action="approved_claim.php" class="transparent-form">
+        <form method="POST" action="pending_claim.php" class="transparent-form">
             <select name="entry_limit" id="entry_limit" onchange="this.form.submit()" class="transparent-select">
                 <option value="5" <?= $limit == 5 ? 'selected' : ''; ?>>5</option>
                 <option value="10" <?= $limit == 10 ? 'selected' : ''; ?>>10</option>
@@ -1667,7 +1582,7 @@ $total_notifications = $claim_count + $found_count + $lost_count;
                             <th scope="col">Last known location</th>
                             <th scope="col">Date Loss</th>
                             <th scope="col">Details</th>
-                            <!--    <th scope="col">Action</th> -->
+
 
                         </tr>
                     </thead>
@@ -1681,7 +1596,7 @@ $total_notifications = $claim_count + $found_count + $lost_count;
                             <td><?= htmlspecialchars($row["location_found"]) ?></td>
                             <td><?= htmlspecialchars($row["date_found"]) ?></td>
                             <td>
-                                <a href="adminviewhistory.php?_id=<?= htmlspecialchars($row["id"]) ?>"
+                                <a href="adminview_pending_claim.php?_id=<?= htmlspecialchars($row["id"]) ?>"
                                     class="view-button">View</a>
                             </td>
 
@@ -1689,9 +1604,10 @@ $total_notifications = $claim_count + $found_count + $lost_count;
                         <?php endforeach; ?>
                         <?php else: ?>
                         <tr>
-                            <td colspan="7">No pending reports found</td>
+                            <td colspan="7">No claim history found</td>
                         </tr>
                         <?php endif; ?>
+
                     </tbody>
                 </table>
             </div>
@@ -1715,6 +1631,94 @@ $total_notifications = $claim_count + $found_count + $lost_count;
                 </div>
             </div>
         </div>
+        <div id="notif" class="modal-overlay" style="display: none;">
+            <div class="modal-content3">
+                <!-- Close Button -->
+                <button class="close-btn" onclick="closeModal('notif')">&times;</button>
+
+                <div class="modal-title3">
+                    <h2>Notification</h2>
+                    <hr>
+                </div>
+
+                <div class="reports-container">
+                    <!-- Pending Claim Reports -->
+                    <div class="reports-btn">
+                        <a href="pending_claim.php" class="">
+                            <button class="transparent-btn">
+                                <div class="claim-reports-container">
+                                    <?php if (!empty($pendingClaimReports)): ?>
+                                    <?php foreach ($pendingClaimReports as $row): ?>
+                                    <div class="claim-card">
+                                        <div class="claim-card-header"></div>
+                                        <div class="claim-card-body">
+                                            <p><span
+                                                    style="font-weight: bold !important;"><?= htmlspecialchars($row['reporter_name']) ?></span>
+                                                submitted a request claim.</p>
+                                        </div>
+                                    </div>
+                                    <?php endforeach; ?>
+                                    <?php else: ?>
+                                    <p>No pending claim reports.</p>
+                                    <?php endif; ?>
+                                </div>
+                            </button>
+                        </a>
+                    </div>
+
+                    <!-- Pending Found Reports -->
+                    <div class="reports-btn">
+                        <a href="pending_found_report.php" class="">
+                            <button class="transparent-btn">
+                                <div class="found-reports-container">
+                                    <?php if (!empty($pendingFoundReports)): ?>
+                                    <?php foreach ($pendingFoundReports as $row): ?>
+                                    <div class="found-card">
+                                        <div class="found-card-header"></div>
+                                        <div class="found-card-body">
+                                            <p><span
+                                                    style="font-weight: bold !important;"><?= htmlspecialchars($row['reporter_name']) ?></span>
+                                                submitted a found report.</p>
+                                        </div>
+                                    </div>
+                                    <?php endforeach; ?>
+                                    <?php else: ?>
+                                    <p>No pending found reports.</p>
+                                    <?php endif; ?>
+                                </div>
+                            </button>
+                        </a>
+                    </div>
+
+                    <!-- Pending Lost Reports -->
+                    <div class="reports-btn">
+                        <a href="pending_lost_report.php?_id=<?= htmlspecialchars($row["id"]) ?>" class="">
+                            <button class="transparent-btn">
+                                <div class="lost-reports-container">
+                                    <?php if (!empty($pendingLostReports)): ?>
+                                    <?php foreach ($pendingLostReports as $row): ?>
+                                    <div class="lost-card">
+                                        <div class="lost-card-header"></div>
+                                        <div class="lost-card-body">
+                                            <p><strong><?= htmlspecialchars($row['reporter_name']) ?></strong> submitted
+                                                a lost report.</p>
+
+                                        </div>
+                                    </div>
+                                    <?php endforeach; ?>
+                                    <?php else: ?>
+                                    <p>No pending lost reports.</p>
+                                    <?php endif; ?>
+                                </div>
+                            </button>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
+
 
         <p class="pagination-info">Showing <?php echo $currentEntriesStart; ?> to <?php echo $currentEntriesEnd; ?> of
             <?php echo $totalRecords; ?> entries</p>
@@ -1799,6 +1803,20 @@ $total_notifications = $claim_count + $found_count + $lost_count;
     function closeModal(modalId) {
         document.getElementById(modalId).style.display = 'none';
     }
+    </script>
+    <script>
+    function toggleSideNav() {
+        const sideNav = document.getElementById('sideNav');
+        sideNav.classList.toggle('open');
+    }
+
+    function showModal(modalId) {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            modal.style.display = 'flex';
+        }
+    }
+
 
     function approveAction(report_id, table_type) {
         fetch('handle_report.php', {
