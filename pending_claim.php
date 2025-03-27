@@ -392,7 +392,7 @@ $total_notifications = $claim_count + $found_count + $lost_count;
         flex-direction: column;
         min-height: 100vh;
 
-        background-image: url('images/bg1.png');
+        background-image: url('images/green\ bg.jpg');
         background-size: cover;
         background-position: center center;
         background-attachment: fixed;
@@ -401,7 +401,7 @@ $total_notifications = $claim_count + $found_count + $lost_count;
 
     /* Navbar styles */
     .navbar {
-        background-color: #2b4257;
+        background-color: rgb(255, 255, 255);
         padding: 10px;
         box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         color: #545454;
@@ -415,7 +415,7 @@ $total_notifications = $claim_count + $found_count + $lost_count;
     }
 
     .navbar a {
-        color: #fff;
+        color: black;
         padding: 3px;
         text-decoration: none;
         margin: 20px;
@@ -444,7 +444,7 @@ $total_notifications = $claim_count + $found_count + $lost_count;
     /* Button that activates the dropdown */
     .navbar .dropbtn {
         background-color: transparent;
-        color: white;
+        color: black;
         padding: 3px 15px;
         border: none;
         cursor: pointer;
@@ -475,6 +475,11 @@ $total_notifications = $claim_count + $found_count + $lost_count;
 
     }
 
+    .a {
+        color: #000;
+        z-index: 9999999999999999999;
+    }
+
     .navbar .dropdown-content a:hover {
         text-decoration: underline;
     }
@@ -489,13 +494,26 @@ $total_notifications = $claim_count + $found_count + $lost_count;
         text-decoration: underline;
     }
 
+    .nav-con {
+        display: flex;
+        flex-direction: column;
+
+    }
+
     .navbar-text {
         font-family: "Times New Roman", Times, serif;
         font-size: 30px;
         font-weight: bold;
-        white-space: nowrap;
-        color: #fff !important;
+        color: #000 !important;
+        margin-bottom: -5px;
         text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+
+    }
+
+    .admin-text {
+        font-size: 23px;
+        margin-top: 10px;
+        margin-left: 5px;
 
     }
 
@@ -505,7 +523,7 @@ $total_notifications = $claim_count + $found_count + $lost_count;
         border: none;
         cursor: pointer;
         font-size: 24px;
-        color: #fff;
+        color: #000;
         outline: none;
         margin-left: auto;
         margin-right: -70px;
@@ -589,7 +607,7 @@ $total_notifications = $claim_count + $found_count + $lost_count;
     }
 
     .hamburger-icon span {
-        background-color: white;
+        background-color: black;
         height: 3px;
         width: 100%;
         border-radius: 2px;
@@ -738,6 +756,10 @@ $total_notifications = $claim_count + $found_count + $lost_count;
     /* Hover effect on the button (optional, for visual feedback) */
     .dropdown-btn:hover {
         background-color: #ccc
+    }
+
+    .guidelines {
+        margin-top: -8px;
     }
 
     .modal-overlay {
@@ -1067,7 +1089,7 @@ $total_notifications = $claim_count + $found_count + $lost_count;
     }
 
     .search-container h2 {
-        color: #545454;
+        color: #fff;
         padding-top: 15px;
         margin-bottom: 9px;
         margin-top: 10px !important;
@@ -1084,12 +1106,12 @@ $total_notifications = $claim_count + $found_count + $lost_count;
     .search-input {
         padding: 10px;
         width: 500px;
-        border: 2px solid #545454;
+        border: 2px solid #fff;
         border-radius: 0px;
         font-size: 14px;
         margin-right: 0px;
         background-color: transparent;
-        color: #545454;
+        color: #fff;
     }
 
     .search-input:focus {
@@ -1099,21 +1121,21 @@ $total_notifications = $claim_count + $found_count + $lost_count;
 
     .search-btn {
         padding: 10px 20px;
-        background-color: #545454;
-        color: white;
-        border: 2px solid #545454;
+        background-color: #fff;
+        color: #c2c2c2;
+        border: 2px solid #fff;
         border-radius: 0px;
         cursor: pointer;
         font-size: 14px;
     }
 
     .search-btn:hover {
-        background-color: #444444;
+        background-color: #c2c2c2;
     }
 
     .search-btn ion-icon {
         font-size: 14px;
-        color: #fff;
+        color: #c2c2c2;
 
     }
 
@@ -1132,14 +1154,14 @@ $total_notifications = $claim_count + $found_count + $lost_count;
 
     .transparent-select {
         background: transparent;
-        border: 1px solid #545454;
+        border: 1px solid #fff;
         color: #333;
         padding: 5px 10px;
         font-size: 14px;
     }
 
     .transparent-form label {
-        color: #545454;
+        color: #fff;
         font-size: 14px;
     }
 
@@ -1147,7 +1169,7 @@ $total_notifications = $claim_count + $found_count + $lost_count;
     /* Button styles */
     .btn .view-button {
         padding: 4px 8px;
-        color: #545454 !important;
+        color: #fff !important;
         text-decoration: none;
 
         display: inline-block;
@@ -1241,7 +1263,7 @@ $total_notifications = $claim_count + $found_count + $lost_count;
     /* Pagination: align horizontally */
     .pagination-info {
         font-size: 14px;
-        color: #545454;
+        color: #fff;
         margin: 10px 0;
         font-family: 'Arial', sans-serif;
         display: inline-block;
@@ -1275,7 +1297,7 @@ $total_notifications = $claim_count + $found_count + $lost_count;
 
     /* Active page number styling */
     .pagination a.active {
-        background-color: #2b4257;
+        background-color: #fff;
         color: #fff;
         border-color: #545454;
     }
@@ -1283,7 +1305,7 @@ $total_notifications = $claim_count + $found_count + $lost_count;
     /* Hover effect for pagination links */
     .pagination a:hover {
         background-color: #ddd;
-        color: #007bff;
+        color: #28a745;
     }
 
 
@@ -1300,9 +1322,9 @@ $total_notifications = $claim_count + $found_count + $lost_count;
 
     /* Footer */
     .footer {
-        background-color: #2b4257;
+        background-color: #fff;
         padding: 20px 0;
-        color: #fff;
+        color: #000;
         font-family: 'Hanken Grotesk', sans-serif;
         width: 100%;
         display: flex;
@@ -1374,7 +1396,7 @@ $total_notifications = $claim_count + $found_count + $lost_count;
 
 
     .footer-others a {
-        color: #fff;
+        color: #000;
         text-decoration: none;
         font-size: 14px;
     }
@@ -1382,7 +1404,7 @@ $total_notifications = $claim_count + $found_count + $lost_count;
     .footer-separator {
         width: 90%;
         height: 1px;
-        background-color: #fff;
+        background-color: #000;
         margin: 10px auto;
         border: none;
         position: absolute;
@@ -1395,7 +1417,7 @@ $total_notifications = $claim_count + $found_count + $lost_count;
     .footer-text {
         font-size: 14px;
         margin-top: 20px;
-        color: #fff;
+        color: #000;
         position: absolute;
         bottom: 20px;
         left: 50%;
@@ -1484,7 +1506,10 @@ $total_notifications = $claim_count + $found_count + $lost_count;
 
         <div class="navbar">
             <img src="images/logo.png" alt="Logo" class="navbar-logo">
-            <span class="navbar-text">UNIVERSITY OF CALOOCAN CITY</span>s
+            <div class="nav-con">
+                <span class="navbar-text">UNIVERSITY OF CALOOCAN CITY</span>
+                <p class="admin-text">LOST AND FOUND ADMIN</p>
+            </div>
             <!-- Claim Reports Dropdown -->
             <div class="dropdown">
                 <button class="dropbtn">Claim Reports</button>
@@ -1513,8 +1538,7 @@ $total_notifications = $claim_count + $found_count + $lost_count;
             </div>
 
             <!-- Guidelines Link -->
-            <a href="Guidelines.php">Guidelines</a>
-
+            <p class="guidelines"><a href="Guidelines.php">Guidelines</a></p>
             <!-- Notification Icon Button -->
             <button class="notif-btn" onclick="showModal('notif')">
                 <ion-icon name="notifications"></ion-icon>
